@@ -12,6 +12,8 @@ The core loop is: **create a report → snap receipts into it → export or back
   an amount, and a date.
 - Reports export to a **PDF** (summary + image pages) and to a **ZIP bundle** (CSV + original images).
 - Everything can be backed up to **Google Drive** as a versioned ZIP and restored onto a new phone.
+  Two paths, see [Backup & Restore](#backup--restore): a zero-setup file-picker path that works
+  day one, and an optional authenticated Drive API path with one-tap backup and auto-retention.
 
 Everything works with no network connection. Drive is the only online feature.
 
@@ -30,7 +32,9 @@ Everything works with no network connection. Drive is the only online feature.
 | Cropping | CanHub `Android-Image-Cropper` (Apache-2.0) |
 | PDF | `android.graphics.pdf.PdfDocument` (no third-party PDF lib) |
 | ZIP | `java.util.zip` |
-| Drive | Google Sign-In + Drive REST v3 (`drive.file` scope) |
+| Backup (default) | Storage Access Framework (`ACTION_CREATE_DOCUMENT` / `ACTION_OPEN_DOCUMENT`) |
+| Backup (optional) | Google Sign-In + Drive REST v3 (`drive.file` scope) |
+| Background work | WorkManager |
 | Build | Gradle (Kotlin DSL) with wrapper |
 
 `minSdk 26` (Android 8.0) · `targetSdk 36` · `compileSdk 36` · JDK 21 toolchain.
@@ -138,10 +142,11 @@ images/<n>-<slug>.jpg   # numbered to match the CSV row order
 ```
 CSV amounts are written as plain decimal strings (`24.50`), RFC-4180 quoted.
 
-## Google Drive Backup
+## Backup & Restore
 
 Replaces the "pickle" idea from the original sketch with a portable, inspectable format:
-a ZIP containing JSON metadata plus the images.
+a ZIP containing JSON metadata plus the images. The **file format is identical** for both
+paths below, so a backup made one way restores the other way.
 
 **Backup file** — `receipts-backup-<yyyyMMdd-HHmmss>.zip`
 ```
@@ -150,32 +155,61 @@ manifest.json           # { schemaVersion, appVersion, createdAt, currency,
 images/<receiptId>.jpg  # every image referenced by the manifest
 ```
 
-**Auth** — Google Sign-In requesting only the `drive.file` scope, which grants access solely to
-files this app creates. The app cannot see the rest of the user's Drive.
+`schemaVersion` is checked on restore; a newer-than-known backup is refused rather than
+half-imported. Restore **replaces all local data** after an explicit confirmation —
+merge-on-restore is not supported. Both paths run in a `WorkManager` worker so they survive
+the app being backgrounded.
 
-**Behavior**
-- Backups go to a `Receipts Backups` folder created by the app in Drive.
-- "Back up now" is manual and explicit. Progress and result are surfaced in the UI, and
-  failures show a real error, never a silent no-op.
-- The app keeps the **10** most recent backups in that folder and deletes older ones.
-- **Restore** lists the backups found in Drive, and the chosen one **replaces all local data**
-  after an explicit typed/confirmed warning. Merge-on-restore is not supported.
-- `schemaVersion` is checked on restore; a newer-than-known backup is refused rather than
-  half-imported.
+### Path A — File picker (default, zero setup)
 
-Uploads and restores run in a `WorkManager` worker so they survive the app being backgrounded.
+Works from the first install with no accounts, no OAuth, and no Cloud project.
 
-### One-time setup required (owner action)
+- **Back up** → the app builds the ZIP and launches `ACTION_CREATE_DOCUMENT`. The system
+  picker appears; the user chooses **Google Drive** (or any other provider, or local storage)
+  and confirms. Android writes the file; the app never touches Drive directly.
+- **Restore** → `ACTION_OPEN_DOCUMENT` filtered to `application/zip`. The user navigates to a
+  backup and picks it.
 
-Drive cannot work until a Google Cloud OAuth client exists. This needs to be done once, by hand:
+Trade-offs, stated plainly: every backup and restore is a manual picker interaction, the app
+cannot list previous backups, and old backups are not pruned automatically. Android's Drive
+provider does not expose directory access, so a "just sync it" experience is not achievable
+on this path.
 
-1. Create a Google Cloud project and enable the **Google Drive API**.
-2. Configure the OAuth consent screen; add the account as a test user.
-3. Create an **OAuth 2.0 Client ID → Android**, with the app's package name
-   (`cc.rocketscience.receipts`) and the SHA-1 of both the debug and release signing keys.
-4. Drop the resulting config where the build expects it; the file stays **out of git**.
+### Path B — Drive API (optional, needs one-time registration)
 
-Until that's done the app builds and runs fully — Settings just shows Drive as unavailable.
+Unlocks the good experience: **one-tap backup**, an in-app list of previous backups with
+dates and sizes, restore picked from that list, and automatic pruning to the **10** most
+recent. Backups go to a `Receipts Backups` folder the app creates in Drive.
+
+Auth is Google Sign-In requesting only the **`drive.file`** scope, which grants access solely
+to files this app itself created. The app cannot see the rest of the user's Drive.
+
+**Why this can't be a purely in-app setup step.** An OAuth client is a *developer*
+registration that binds a client identity to this app's package name and signing-key
+fingerprint. An app cannot register its own identity — that is the chicken-and-egg the
+consent model is designed to prevent. So the Console visit is unavoidable. What the app *can*
+do is remove every bit of guesswork from it, which is what the setup screen below does.
+
+**In-app setup screen** (Settings → "Enable one-tap Drive backup"):
+
+1. Explains what the registration buys and that Path A already works without it.
+2. Displays the exact values to paste into the Console — the package name
+   (`cc.rocketscience.receipts`) and the **SHA-1 fingerprint of the currently running
+   build's signing key**, read at runtime from the app's own `PackageInfo`. Each has a
+   copy-to-clipboard button. This is the part that is genuinely error-prone by hand, and it
+   differs between the debug and release builds, so the app showing its own live value
+   removes the most common way this goes wrong.
+3. Deep-links out to the Google Cloud Console credentials page.
+4. A **"Test connection"** button that attempts sign-in and reports the specific failure
+   (wrong SHA-1, wrong package, Drive API not enabled, account not a listed test user)
+   rather than a generic error.
+
+Console steps, for reference: create a project → enable the **Google Drive API** → configure
+the OAuth consent screen and add the account as a test user → create an **OAuth 2.0 Client
+ID → Android** with the package name and SHA-1 from step 2.
+
+Until this is done, Settings shows Path B as "Not set up" with a link to the setup screen,
+and Path A remains fully functional. Nothing about the app is blocked on it.
 
 ## Permissions
 
@@ -189,17 +223,51 @@ No storage permissions, no location, no contacts, no analytics, no crash reporti
 
 ## Build & Run
 
-Prerequisites — neither is installed on this machine yet:
-- **JDK 21.** The system JDK is 26, which the Android Gradle Plugin rejects.
-- **Android SDK** via `commandlinetools` (platform 36, build-tools, platform-tools).
-  Android Studio is optional; `adb` is already on `PATH`.
+### Toolchain (installed)
+
+| Tool | Version | Location |
+| --- | --- | --- |
+| JDK | Temurin 21.0.12 | `/opt/homebrew/opt/openjdk@21` (keg-only) |
+| Android SDK | — | `~/Library/Android/sdk` |
+| Platforms | android-36, android-37.1 | |
+| Build-tools | 36.1.0, 37.0.0 | |
+| Platform-tools | 37.0.1 | includes `adb` |
+| cmdline-tools | via `android-commandlinetools` cask | `sdkmanager`, `avdmanager`, `apkanalyzer` on `PATH` |
+
+Installed with:
+```sh
+brew install openjdk@21
+brew install --cask android-commandlinetools
+sdkmanager --sdk_root="$HOME/Library/Android/sdk" \
+  platform-tools "platforms;android-37.1" "platforms;android-36" \
+  "build-tools;37.0.0" "build-tools;36.1.0"
+```
+
+The system JDK is **26**, which the Android Gradle Plugin rejects — so the build must point at
+JDK 21 explicitly. `gradle.properties` sets `org.gradle.java.home`, and the SDK location goes
+in `local.properties` (both gitignored; a `.example` copy of each is committed):
+
+```properties
+# local.properties
+sdk.dir=/Users/justin/Library/Android/sdk
+# gradle.properties
+org.gradle.java.home=/opt/homebrew/opt/openjdk@21
+```
+
+Note: `sdkmanager` now prints a deprecation notice in favor of the newer `android sdk`
+subcommand. It still works; no need to migrate yet.
+
+### Commands
 
 ```sh
 ./gradlew assembleDebug                 # debug APK
 ./gradlew installDebug                  # build + push to a connected device
-./gradlew test                           # unit tests
+./gradlew test                          # unit tests
 ./gradlew assembleRelease               # signed release APK
 ```
+
+`compileSdk`/`targetSdk` start at **36** — API 37 is installed and ready, and we move up once
+the pinned AGP version officially supports it (AGP rejects a `compileSdk` it doesn't know).
 
 Release signing reads the keystore path and passwords from `keystore.properties`
 (gitignored) or from environment variables in CI. The keystore itself is never committed.
@@ -225,8 +293,13 @@ edit/delete/replace photo, "Save & add another".
 
 **Phase 3 — Export.** PDF generation, ZIP + CSV generation, share sheet wiring.
 
-**Phase 4 — Drive.** Google Sign-In, backup ZIP writer, upload + retention, restore with
-replace-all, `WorkManager` wiring, Settings screen.
+**Phase 4 — Backup.** Backup ZIP writer and manifest, restore with replace-all,
+`WorkManager` wiring, Settings screen, and **Path A** (file picker) end to end. This phase
+delivers working backup/restore with no external setup.
+
+**Phase 4b — Drive API.** Google Sign-In, `drive.file` upload, backup listing, retention
+pruning, and the in-app setup screen with the live SHA-1 readout and "Test connection".
+Gated behind the registration; skippable without affecting anything else.
 
 **Phase 5 — Release.** Release signing, icon and app name, `assembleRelease`, on-device pass
 over the whole flow.
@@ -241,5 +314,5 @@ Kept here so they don't leak into v1 scope:
 - Categories and per-category subtotals.
 - Report status lifecycle (open/submitted/reimbursed).
 - Multi-currency with per-receipt currency.
-- Scheduled/automatic Drive backup.
+- Scheduled/automatic backup (only meaningful on Path B).
 - Mileage or per-diem line items that have no receipt image.
