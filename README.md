@@ -21,14 +21,15 @@ Everything works with no network connection. Drive is the only online feature.
 
 | Concern | Choice |
 | --- | --- |
-| Language | Kotlin |
-| UI | Jetpack Compose + Material 3 |
+| Language | Kotlin (supplied by AGP 9's built-in Kotlin support — the `kotlin-android` plugin is no longer applied, and applying it is now an error) |
+| UI | Jetpack Compose + Material 3, plus `material-icons-core` (the icon set is no longer transitive from material3) |
 | Navigation | Navigation Compose |
 | Architecture | Single Gradle module, MVVM (`ViewModel` + `StateFlow`), repository layer |
 | DI | Manual constructor injection via a small `AppContainer`. No Hilt. |
 | Database | Room |
 | Preferences | DataStore (Preferences) |
 | Camera | CameraX (`ImageCapture`) |
+| Photo picking | `ActivityResultContracts.PickVisualMedia` (no permission required) |
 | Cropping | CanHub `Android-Image-Cropper` (Apache-2.0) |
 | PDF | `android.graphics.pdf.PdfDocument` (no third-party PDF lib) |
 | ZIP | `java.util.zip` |
@@ -52,6 +53,10 @@ Resolved against the current release channels and the target device. These go in
 | Compose BOM | 2026.08.00 |
 | CameraX | 1.6.1 |
 | Room | 2.8.4 |
+| KSP | 2.3.11 |
+
+`compileSdk = 37` makes AGP fetch platform `android-37.0` and build-tools `36.0.0` on top of
+what was installed by hand; both are pulled automatically on first build.
 
 
 No Hilt, no Retrofit, no Compose accompanist, no multi-module split — none of it is needed for
@@ -156,29 +161,58 @@ count of any such orphans so the loss is visible instead of discovered at export
 1. **Reports list** (home) — each row shows name, date range, receipt count, and total.
    FAB creates a new report. Long-press a row for Rename / **Delete**.
 2. **Report detail** — a header card with the grand total and receipt count; below it the
-   receipt rows (thumbnail, description, date, amount). FAB opens the camera.
+   receipt rows (thumbnail, description, date, amount). FAB opens the image source chooser.
    Long-press a receipt row to **delete** it without opening it.
    Overflow menu: Export PDF, Export ZIP, Rename, **Delete report**.
-3. **Capture** — full-bleed CameraX preview, shutter button, flash toggle. Requests
+3. **Image source chooser** — a bottom sheet, because a receipt does not always arrive the
+   same way. Three options:
+   - **Take a photo** → the camera (screen 4). The common case for a paper receipt in hand.
+   - **Choose from photos** → the system photo picker. For receipts that arrived as a
+     screenshot, an emailed PDF-turned-image, or a photo taken before the app was open.
+   - **No photo** → straight to receipt entry (screen 6). The data model already allows a
+     receipt with no image, and cash tips and the like have no receipt to photograph.
+4. **Capture** — full-bleed CameraX preview, shutter button, flash toggle. Requests
    `CAMERA` permission with a rationale on first use.
-4. **Crop** — the crop UI over the captured frame, with rotate and Retake. Confirming writes
-   the cropped JPEG and advances.
-5. **Receipt entry** — image thumbnail on top, then Description, Amount, and Date fields.
+5. **Crop** — the crop UI over the image, with rotate and Retake/Re-pick. Both the camera and
+   the picker land here, so cropping and orientation behave identically either way.
+   Confirming writes the cropped JPEG and advances.
+6. **Receipt entry** — image thumbnail on top, then Description, Amount, and Date fields.
    Amount uses a currency-aware numeric input. Two actions: **Save** (back to report detail)
-   and **Save & add another** (straight back to Capture) — the latter makes a 12-receipt trip
-   fast to enter.
-6. **Receipt detail / edit** — reached by tapping any receipt row. Shows the stored image
+   and **Save & add another** (back to the source chooser) — the latter makes a 12-receipt
+   trip fast to enter.
+7. **Receipt detail / edit** — reached by tapping any receipt row. Shows the stored image
    with the same Description, Amount, and Date fields, editable in place. Actions: Replace
-   photo and **Delete receipt**.
-7. **Image viewer** — tapping the image on screen 6 opens it full-screen on a dark background:
+   photo (reopens the source chooser, so a bad photo can be swapped for a gallery image or
+   vice versa) and **Delete receipt**.
+8. **Image viewer** — tapping the image on screen 6 opens it full-screen on a dark background:
    pinch-to-zoom and pan (a receipt's fine print is the whole point of keeping the image), and
    horizontal swipe to move between the other receipts in the same report without going back
    up a level. Viewing only — getting images *out* of the app is the ZIP export's job.
-8. **Settings** — currency, Google account connect/disconnect, "Back up now", last-backup
+9. **Settings** — currency, Google account connect/disconnect, "Back up now", last-backup
    timestamp, "Restore from Drive", and app version.
 
-The capture → crop → entry sequence is one logical flow: backing out of it discards the
-in-progress receipt (with a confirm) and cleans up the temp file.
+The chooser → (capture | pick) → crop → entry sequence is one logical flow: backing out of it
+discards the in-progress receipt (with a confirm) and cleans up the temp file.
+
+### Image import pipeline
+
+Both sources converge on **one** normalisation path, so a gallery image and a camera capture
+are indistinguishable downstream — same crop UI, same storage, same exports:
+
+1. **Acquire.** CameraX writes a JPEG to `cacheDir/capture/`. The picker hands back a
+   `content://` URI, which is immediately copied into that same directory — the read grant on
+   a picked URI is transient, so relying on it later would break after a process restart.
+2. **Normalise orientation.** Rotate per the EXIF `Orientation` tag and strip it, rather than
+   carrying a flag that some later consumer might ignore. Camera photos and gallery images
+   both routinely arrive rotated; a receipt sideways in the PDF is the visible symptom.
+3. **Crop** to the user's rectangle.
+4. **Downscale** the long edge to 2048px and re-encode as JPEG quality 85 into
+   `filesDir/images/<receiptId>.jpg`.
+5. **Delete** the temp file in `cacheDir/capture/`.
+
+Step 4 matters more for picked images than for captures: a modern phone screenshot or photo
+can be many megabytes, and a 40-receipt report would otherwise produce a backup ZIP too large
+to move around comfortably.
 
 ## Deleting
 
@@ -300,6 +334,11 @@ and Path A remains fully functional. Nothing about the app is blocked on it.
 
 No storage permissions, no location, no contacts, no analytics, no crash reporting, no ads.
 
+Picking an existing image uses Android's **photo picker** (`ActivityResultContracts.PickVisualMedia`),
+which needs **no permission at all** — the user selects exactly the images they want and the app
+receives only those. That is why "choose from photos" costs nothing here: the alternative,
+`READ_MEDIA_IMAGES`, would ask for the whole photo library to import one receipt.
+
 ## Build & Run
 
 ### Toolchain (installed)
@@ -365,15 +404,33 @@ Release APK lands at `app/build/outputs/apk/release/app-release.apk`.
 - Instrumented UI tests are not part of v1. The camera and Drive paths are verified by hand
   on a real device.
 
+## Status
+
+Phase 1 is complete and running on the device. What exists today:
+
+- Reports list with per-report total, receipt count, and date range; create, rename, delete.
+- Report detail with a running total; add, edit, delete receipts.
+- Receipt entry: description, amount, date (defaults to today, editable via date picker).
+  Save is disabled until the amount parses.
+- Room schema v1 with `ON DELETE CASCADE` and an index on `receipts.reportId`.
+- Image store and orphan sweep wired in, ready for phase 2's photos.
+- 25 unit tests over money parsing/formatting, image-store lifecycle, and delete/cascade.
+
+Release APK is currently **unsigned** — signing config lands in phase 5. Debug APK is ~32 MB;
+the minified release APK is ~2.7 MB.
+
 ## Build Phases
 
-**Phase 1 — Skeleton.** Gradle project, Compose scaffolding, Room schema, `AppContainer`,
-Reports list + Report detail with manual receipt entry (no camera). Create, rename, and delete
-for both reports and receipts, with cascade. Totals correct end to end.
+**Phase 1 — Skeleton. ✅ Done.** Gradle project, Compose scaffolding, Room schema,
+`AppContainer`, Reports list + Report detail with manual receipt entry (no camera). Create,
+rename, and delete for both reports and receipts, with cascade. Totals correct end to end.
+Verified on the Pixel 11: 25 unit tests green, debug and release both assemble, and the
+create → add → delete → total flow was driven end to end on-device.
 
-**Phase 2 — Capture.** CameraX capture → crop → receipt entry flow, image storage, thumbnails,
-edit/delete/replace photo, "Save & add another", and the full-screen image viewer with
-zoom/swipe plus share and save-a-copy.
+**Phase 2 — Images.** The source chooser (camera / photos / none), CameraX capture, the photo
+picker, the shared import pipeline (EXIF normalisation, crop, downscale), image storage,
+row thumbnails, edit/delete/replace photo, "Save & add another", and the full-screen viewer
+with zoom and swipe.
 
 **Phase 3 — Export.** PDF generation, ZIP + CSV generation, share sheet wiring.
 

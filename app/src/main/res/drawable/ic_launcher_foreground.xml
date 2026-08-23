@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Receipt body with a torn bottom edge. -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M32,26 h44 v54 l-5.5,-4 l-5.5,4 l-5.5,-4 l-5.5,4 l-5.5,-4 l-5.5,4 l-5.5,-4 l-5.5,4 z" />
+    <!-- Line items. -->
+    <path android:fillColor="#3949AB" android:pathData="M39,36 h30 v4 h-30 z" />
+    <path android:fillColor="#3949AB" android:pathData="M39,46 h30 v4 h-30 z" />
+    <path android:fillColor="#3949AB" android:pathData="M39,56 h18 v4 h-18 z" />
+    <!-- Total, set apart. -->
+    <path android:fillColor="#3949AB" android:pathData="M39,66 h30 v5 h-30 z" />
+</vector>

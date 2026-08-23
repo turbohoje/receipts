@@ -1,0 +1,54 @@
+# ---------- Build output ----------
+# Matches app/build, and any future module's build dir.
+build/
+.gradle/
+# Kotlin 2.x compiler session state
+.kotlin/
+# NDK
+.cxx/
+.externalNativeBuild/
+*.apk
+*.aab
+*.ap_
+*.aar
+*.dex
+*.class
+*.jar
+# ...but the Gradle wrapper jar MUST be committed, or ./gradlew cannot bootstrap.
+!gradle/wrapper/gradle-wrapper.jar
+
+# ---------- Machine-specific ----------
+# SDK path differs per machine; local.properties.example is the committed template.
+local.properties
+
+# ---------- Secrets ----------
+# Signing a release must never depend on anything in this repo.
+keystore.properties
+*.jks
+*.keystore
+# Google OAuth config for the Drive path.
+google-services.json
+*.p12
+*.pepk
+
+# ---------- Reports and logs ----------
+lint-results*.html
+lint-results*.xml
+lint-results*.txt
+*.log
+/captures/
+.navigation/
+
+# ---------- IDE ----------
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+
+# ---------- OS ----------
+.DS_Store
+._*
+.Spotlight-V100
+.Trashes
+Thumbs.db
