@@ -241,10 +241,10 @@ private fun PermissionNeeded(denied: Boolean, onRequest: () -> Unit, onBack: () 
         Spacer(Modifier.height(12.dp))
         Text(
             if (denied) {
-                "Receipts needs the camera to photograph a receipt. You can still add one " +
+                "RS Receipts needs the camera to photograph a receipt. You can still add one " +
                     "with \"Choose from photos\" instead."
             } else {
-                "Receipts uses the camera only to photograph receipts."
+                "RS Receipts uses the camera only to photograph receipts."
             },
             style = MaterialTheme.typography.bodyMedium,
             color = Color.White.copy(alpha = 0.8f),

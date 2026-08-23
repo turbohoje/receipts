@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="18 18 72 72" width="512" height="512">
+  <rect x="18" y="18" width="72" height="72" fill="#3949AB"/>
+  <!-- Receipt body with a torn bottom edge. -->
+  <path fill="#FFFFFF"
+        d="M32,26 h44 v54 l-5.5,-4 l-5.5,4 l-5.5,-4 l-5.5,4 l-5.5,-4 l-5.5,4 l-5.5,-4 l-5.5,4 z"/>
+  <!-- Line items. -->
+  <path fill="#3949AB" d="M39,36 h30 v4 h-30 z"/>
+  <path fill="#3949AB" d="M39,46 h30 v4 h-30 z"/>
+  <path fill="#3949AB" d="M39,56 h18 v4 h-18 z"/>
+  <!-- Total, set apart. -->
+  <path fill="#3949AB" d="M39,66 h30 v5 h-30 z"/>
+</svg>

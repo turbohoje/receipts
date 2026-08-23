@@ -112,11 +112,11 @@ class SettingsViewModel(
 
     private fun describe(problem: RestoreProblem): String = when (problem) {
         is RestoreProblem.TooNew ->
-            "That backup was written by a newer version of Receipts " +
+            "That backup was written by a newer version of RS Receipts " +
                 "(format ${problem.found}, this app understands ${problem.supported}). " +
                 "Update the app and try again."
         RestoreProblem.NoManifest ->
-            "That file is not a Receipts backup — it has no manifest."
+            "That file is not an RS Receipts backup — it has no manifest."
         is RestoreProblem.Unreadable ->
             "That backup could not be read: ${problem.detail}"
     }
@@ -242,9 +242,9 @@ class SettingsViewModel(
         append("Google sign-in failed: ${failed.message}")
         failed.statusCode?.let { append(" (code $it)") }
         append(
-            "\n\nThis usually means the OAuth client has not been registered yet, or was " +
-                "registered with a different package name or signing fingerprint. " +
-                "See \"Set up Google Drive\"."
+            "\n\nIf this build was installed from a different signing key than the one " +
+                "registered with Google, Drive backup will not work for it. " +
+                "\"Back up to a file\" works regardless."
         )
     }
 }

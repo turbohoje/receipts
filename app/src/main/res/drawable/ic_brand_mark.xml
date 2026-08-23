@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The app icon as a self-contained square mark for the top bar.
+
+  The launcher foreground alone will not do here: its receipt is white and only legible against
+  the blue background layer, which the launcher supplies separately. This bakes both layers into
+  one drawable, cropped to the central 72x72 of the 108x108 adaptive canvas — the region a
+  launcher actually shows — so the receipt fills the mark instead of floating in padding.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="72dp"
+    android:height="72dp"
+    android:viewportWidth="72"
+    android:viewportHeight="72">
+
+    <!-- Rounded-square background. -->
+    <path
+        android:fillColor="#3949AB"
+        android:pathData="M16,0 H56 A16,16 0 0 1 72,16 V56 A16,16 0 0 1 56,72 H16 A16,16 0 0 1 0,56 V16 A16,16 0 0 1 16,0 Z" />
+
+    <!-- Receipt body with a torn bottom edge. -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M14,8 h44 v54 l-5.5,-4 l-5.5,4 l-5.5,-4 l-5.5,4 l-5.5,-4 l-5.5,4 l-5.5,-4 l-5.5,4 z" />
+
+    <!-- Line items. -->
+    <path android:fillColor="#3949AB" android:pathData="M21,18 h30 v4 h-30 z" />
+    <path android:fillColor="#3949AB" android:pathData="M21,28 h30 v4 h-30 z" />
+    <path android:fillColor="#3949AB" android:pathData="M21,38 h18 v4 h-18 z" />
+    <!-- Total, set apart. -->
+    <path android:fillColor="#3949AB" android:pathData="M21,48 h30 v5 h-30 z" />
+</vector>

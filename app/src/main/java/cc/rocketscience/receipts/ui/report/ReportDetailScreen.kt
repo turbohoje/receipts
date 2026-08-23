@@ -384,6 +384,6 @@ private fun share(context: android.content.Context, result: ExportResult.Success
         context = context,
         file = result.file,
         mimeType = result.mimeType,
-        subject = reportName ?: "Receipts export",
+        subject = reportName ?: "RS Receipts export",
     )
 }

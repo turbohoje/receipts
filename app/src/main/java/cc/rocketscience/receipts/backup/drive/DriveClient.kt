@@ -32,7 +32,7 @@ class DriveException(message: String, val status: Int? = null) : Exception(messa
 class DriveClient(private val json: Json = Json { ignoreUnknownKeys = true }) {
 
     companion object {
-        const val FOLDER_NAME = "Receipts Backups"
+        const val FOLDER_NAME = "RS Receipts Backups"
         private const val FOLDER_MIME = "application/vnd.google-apps.folder"
         private const val API = "https://www.googleapis.com/drive/v3"
         private const val UPLOAD = "https://www.googleapis.com/upload/drive/v3"

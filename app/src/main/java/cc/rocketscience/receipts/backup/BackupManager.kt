@@ -37,7 +37,7 @@ class BackupManager(
             .ofPattern("yyyyMMdd-HHmmss")
             .withZone(java.time.ZoneId.systemDefault())
             .format(java.time.Instant.ofEpochMilli(now()))
-        return "receipts-backup-$stamp.zip"
+        return "rs-receipts-backup-$stamp.zip"
     }
 
     suspend fun buildManifest(): BackupManifest = withContext(Dispatchers.IO) {

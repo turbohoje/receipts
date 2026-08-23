@@ -1,4 +1,4 @@
-# Receipts — Android App
+# RS Receipts
 
 An offline-first Android app for capturing receipts with the phone camera, grouping them into
 expense reports, and exporting/backing up those reports. Ships as a standard signed APK.
@@ -195,7 +195,7 @@ count of any such orphans so the loss is visible instead of discovered at export
    pinch-to-zoom and pan (a receipt's fine print is the whole point of keeping the image), and
    horizontal swipe to move between the other receipts in the same report without going back
    up a level. Viewing only — getting images *out* of the app is the ZIP export's job.
-9. **Settings** — currency, Google account connect/disconnect, "Back up now", last-backup
+9. **Settings** — reached from the reports list. Currency, Google account connect/disconnect, "Back up now", last-backup
    timestamp, "Restore from Drive", and app version.
 
 The chooser → (capture | pick) → crop → entry sequence is one logical flow: backing out of it
@@ -272,7 +272,7 @@ Replaces the "pickle" idea from the original sketch with a portable, inspectable
 a ZIP containing JSON metadata plus the images. The **file format is identical** for both
 paths below, so a backup made one way restores the other way.
 
-**Backup file** — `receipts-backup-<yyyyMMdd-HHmmss>.zip`
+**Backup file** — `rs-receipts-backup-<yyyyMMdd-HHmmss>.zip`
 ```
 manifest.json           # { schemaVersion, appVersion, createdAt, currency,
                         #   reports: [...], receipts: [...] }   full DB dump
@@ -319,10 +319,19 @@ on this path.
 
 Unlocks the good experience: **one-tap backup**, an in-app list of previous backups with
 dates and sizes, restore picked from that list, and automatic pruning to the **10** most
-recent. Backups go to a `Receipts Backups` folder the app creates in Drive.
+recent. Backups go to an `RS Receipts Backups` folder the app creates in Drive.
 
-Auth is Google Sign-In requesting only the **`drive.file`** scope, which grants access solely
-to files this app itself created. The app cannot see the rest of the user's Drive.
+Auth requests only the **`drive.file`** scope, which grants access solely to files this app
+itself created. The app cannot see the rest of the user's Drive. It uses `AuthorizationClient`
+rather than the deprecated `GoogleSignIn`, because what is needed is a scope grant, not an
+identity.
+
+**Nothing is embedded in the app — there is no client ID and no secret.** An Android OAuth
+client has no secret at all; its identity *is* the pair (package name, signing-certificate
+SHA-1), and Google Play Services resolves that at runtime from the installed APK's signature.
+So `AuthorizationRequest` carries only the scope, no configuration file is needed, and there is
+nothing in the repository that could leak. Registering in the Console is the whole of the
+setup.
 
 **Why this can't be a purely in-app setup step.** An OAuth client is a *developer*
 registration that binds a client identity to this app's package name and signing-key
@@ -330,31 +339,22 @@ fingerprint. An app cannot register its own identity — that is the chicken-and
 consent model is designed to prevent. So the Console visit is unavoidable. What the app *can*
 do is remove every bit of guesswork from it, which is what the setup screen below does.
 
-**In-app setup screen** (Settings → "Enable one-tap Drive backup"):
-
-1. Explains what the registration buys and that Path A already works without it.
-2. Displays the exact values to paste into the Console — the package name
-   (`cc.rocketscience.receipts`) and the **SHA-1 fingerprint of the currently running
-   build's signing key**, read at runtime from the app's own `PackageInfo`. Each has a
-   copy-to-clipboard button. This is the part that is genuinely error-prone by hand, and it
-   differs between the debug and release builds, so the app showing its own live value
-   removes the most common way this goes wrong.
-3. Deep-links out to the Google Cloud Console credentials page.
-4. A **"Test connection"** button that attempts sign-in and reports the specific failure
-   (wrong SHA-1, wrong package, Drive API not enabled, account not a listed test user)
-   rather than a generic error.
-
-Console steps, for reference: create a project → enable the **Google Drive API** → configure
-the OAuth consent screen and add the account as a test user → create an **OAuth 2.0 Client
-ID → Android** with the package name and SHA-1 from step 2.
+**Setup lives in [`docs/google-drive-setup.md`](docs/google-drive-setup.md)**, not in the app.
+There was briefly an in-app setup screen that displayed the running build's own package name
+and signing SHA-1 for pasting into the Console. It was removed: registering an OAuth client is
+a one-off developer task, and putting Cloud Console instructions in front of every user of the
+app is the wrong place for them. The doc carries the registered values, the commands that
+reprint a fingerprint, the Console walkthrough and a troubleshooting table.
 
 Until this is done, Path B fails with Google's own message plus a pointer to the setup screen,
 and Path A remains fully functional. Nothing about the app is blocked on it.
 
-**Status.** Built and wired. The authorization handshake was verified as far as Google's own
-account-consent screen; completing it needs a real Google account and the Console registration
-above, so it is left to the owner. Cancelling out reports "Google Drive access was not
-granted." rather than hanging.
+**Status.** Built and wired; the OAuth client is registered and the privacy policy and terms
+URLs are published at <https://rocketscience.cc/privacy.html> and
+<https://rocketscience.cc/terms.html>. Failures report Google's own message, because an
+unenabled API, an unregistered fingerprint and an unlisted test user each need a different fix.
+Cancelling the consent screen reports "Google Drive access was not granted." rather than
+hanging.
 
 ## Permissions
 
@@ -362,9 +362,12 @@ granted." rather than hanging.
 | --- | --- |
 | `CAMERA` | capturing receipts |
 | `INTERNET` | Drive backup only |
-| `POST_NOTIFICATIONS` | backup-complete/failed notification from the worker (always runtime-requested; `minSdk 33` means no legacy branch) |
+
+`POST_NOTIFICATIONS` is **not** requested: there is no background worker to notify from (see
+the `WorkManager` note under Backup & Restore), so the app has no reason to hold it.
 
 No storage permissions, no location, no contacts, no analytics, no crash reporting, no ads.
+The release APK was verified to declare only `CAMERA` and `INTERNET`.
 
 Picking an existing image uses Android's **photo picker** (`ActivityResultContracts.PickVisualMedia`),
 which needs **no permission at all** — the user selects exactly the images they want and the app

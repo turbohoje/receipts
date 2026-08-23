@@ -52,7 +52,6 @@ import cc.rocketscience.receipts.ui.formatDate
 fun SettingsScreen(
     factory: ViewModelProvider.Factory,
     onBack: () -> Unit,
-    onOpenDriveSetup: () -> Unit,
 ) {
     val vm: SettingsViewModel = viewModel(factory = factory)
     val lastBackupAt by vm.lastBackupAt.collectAsState()
@@ -136,7 +135,7 @@ fun SettingsScreen(
             Section("Google Drive") {
                 Text(
                     "One-tap backup, a list of previous backups, and automatic pruning to the " +
-                        "newest ${DriveClient.MAX_BACKUPS}. Needs a one-time Google Cloud setup.",
+                        "newest ${DriveClient.MAX_BACKUPS}.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -151,7 +150,6 @@ fun SettingsScreen(
                         enabled = !vm.busy,
                     ) { Text("List backups") }
                 }
-                TextButton(onClick = onOpenDriveSetup) { Text("Set up Google Drive") }
 
                 if (vm.driveBackups.isNotEmpty()) {
                     HorizontalDivider(Modifier.padding(vertical = 8.dp))

@@ -1,6 +1,7 @@
 package cc.rocketscience.receipts.ui.reports
 
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -8,6 +9,9 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -35,10 +39,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
+import cc.rocketscience.receipts.R
 import cc.rocketscience.receipts.data.ReportSummary
 import cc.rocketscience.receipts.money.Money
 import cc.rocketscience.receipts.ui.ConfirmDialog
@@ -62,7 +69,20 @@ fun ReportsListScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Receipts") },
+                title = {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Image(
+                            painter = painterResource(R.drawable.ic_brand_mark),
+                            // Decorative: the adjacent title already names the app.
+                            contentDescription = null,
+                            modifier = Modifier
+                                .size(26.dp)
+                                .clip(RoundedCornerShape(6.dp)),
+                        )
+                        Spacer(Modifier.width(10.dp))
+                        Text("RS Receipts")
+                    }
+                },
                 actions = {
                     IconButton(onClick = onOpenSettings) {
                         Icon(Icons.Filled.Settings, contentDescription = "Settings")

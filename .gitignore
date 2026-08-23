@@ -26,8 +26,10 @@ local.properties
 keystore.properties
 *.jks
 *.keystore
-# Google OAuth config for the Drive path.
+# Google OAuth config. The app needs none of this — an Android OAuth client has no secret,
+# and no client ID is embedded in the APK — but keep it out of the repo regardless.
 google-services.json
+client_secret*.json
 *.p12
 *.pepk
 
