@@ -37,10 +37,55 @@ Everything works with no network connection. Drive is the only online feature.
 | Background work | WorkManager |
 | Build | Gradle (Kotlin DSL) with wrapper |
 
-`minSdk 26` (Android 8.0) · `targetSdk 36` · `compileSdk 36` · JDK 21 toolchain.
+`minSdk 33` (Android 13) · `targetSdk 37` · `compileSdk 37` · JDK 21 toolchain.
+
+### Pinned versions
+
+Resolved against the current release channels and the target device. These go in
+`gradle/libs.versions.toml` as a version catalog — one place to bump.
+
+| Component | Version |
+| --- | --- |
+| Gradle | 9.7.1 |
+| Android Gradle Plugin | 9.3.1 |
+| Kotlin | 2.4.10 |
+| Compose BOM | 2026.08.00 |
+| CameraX | 1.6.1 |
+| Room | 2.8.4 |
+
 
 No Hilt, no Retrofit, no Compose accompanist, no multi-module split — none of it is needed for
 an app this size. Add them only when a concrete problem demands it.
+
+## Target Device
+
+Verified over `adb` against the actual phone, so the build config is measured rather than guessed.
+
+| Property | Value |
+| --- | --- |
+| Model | Pixel 11 (`cubs`) |
+| Android | 17 (API **37**), build `CD1A.260714.001.A9` |
+| Security patch | 2026-08-05 |
+| ABI | `arm64-v8a` **only** |
+| Screen | 1080 × 2424 @ 420 dpi |
+| Play Services | 26.32.34 (`targetSdk 37`) |
+| Google Drive app | 2.26.327.3 |
+| Camera | full hardware level, flash, autofocus, manual sensor, RAW |
+
+Consequences for the build:
+
+- **`compileSdk`/`targetSdk` 37**, not the 36 originally specced — the device runs API 37 and
+  AGP 9.3.1 supports it, so there is no reason to target a level behind the hardware.
+- **`minSdk 33`** (Android 13), raised from 26. The phone is API 37, and a 33 floor removes
+  the runtime `POST_NOTIFICATIONS` permission branch entirely, since that permission only
+  exists on 33+. One line in `build.gradle.kts` if older devices ever need to be supported.
+- **Single ABI.** No ABI splits or `abiFilters` needed now — nothing in the v1 dependency set
+  ships native code. If ML Kit OCR lands later (phase 2 of "Later"), restricting to
+  `arm64-v8a` will meaningfully cut APK size.
+- **420 dpi** puts the launcher icon in the `xxhdpi` bucket; adaptive icons cover it, so only
+  the vector source is needed.
+- Drive is installed and Play Services is current, so both backup paths can be tested on this
+  device as-is.
 
 ## Data Model
 
@@ -97,17 +142,23 @@ cacheDir/
 ```
 
 Images live in app-internal storage, so no `READ_MEDIA_IMAGES` permission is required and
-uninstalling the app removes them. Exports leave internal storage only through `FileProvider`
-share intents.
+uninstalling the app removes them. Images leave internal storage only through `FileProvider`
+share intents or a user-chosen `ACTION_CREATE_DOCUMENT` destination.
+
+Because uninstalling wipes the images, **every image must stay reachable while the app is
+installed** — viewable individually in the image viewer, and extractable per-report via the ZIP
+export or wholesale via a backup. A receipt row whose `imageFile` is missing from disk renders a broken-image
+placeholder rather than crashing or silently showing blank, and the report detail surfaces a
+count of any such orphans so the loss is visible instead of discovered at export time.
 
 ## Screens
 
 1. **Reports list** (home) — each row shows name, date range, receipt count, and total.
-   FAB creates a new report. Swipe or long-press to rename/delete (delete confirms, cascades
-   to receipts and their image files).
+   FAB creates a new report. Long-press a row for Rename / **Delete**.
 2. **Report detail** — a header card with the grand total and receipt count; below it the
    receipt rows (thumbnail, description, date, amount). FAB opens the camera.
-   Overflow menu: Export PDF, Export ZIP, Rename, Delete.
+   Long-press a receipt row to **delete** it without opening it.
+   Overflow menu: Export PDF, Export ZIP, Rename, **Delete report**.
 3. **Capture** — full-bleed CameraX preview, shutter button, flash toggle. Requests
    `CAMERA` permission with a rationale on first use.
 4. **Crop** — the crop UI over the captured frame, with rotate and Retake. Confirming writes
@@ -116,13 +167,41 @@ share intents.
    Amount uses a currency-aware numeric input. Two actions: **Save** (back to report detail)
    and **Save & add another** (straight back to Capture) — the latter makes a 12-receipt trip
    fast to enter.
-6. **Receipt detail / edit** — reached by tapping a row. Same fields, plus full-screen image
-   view, Replace photo, and Delete.
-7. **Settings** — currency, Google account connect/disconnect, "Back up now", last-backup
+6. **Receipt detail / edit** — reached by tapping any receipt row. Shows the stored image
+   with the same Description, Amount, and Date fields, editable in place. Actions: Replace
+   photo and **Delete receipt**.
+7. **Image viewer** — tapping the image on screen 6 opens it full-screen on a dark background:
+   pinch-to-zoom and pan (a receipt's fine print is the whole point of keeping the image), and
+   horizontal swipe to move between the other receipts in the same report without going back
+   up a level. Viewing only — getting images *out* of the app is the ZIP export's job.
+8. **Settings** — currency, Google account connect/disconnect, "Back up now", last-backup
    timestamp, "Restore from Drive", and app version.
 
 The capture → crop → entry sequence is one logical flow: backing out of it discards the
 in-progress receipt (with a confirm) and cleans up the temp file.
+
+## Deleting
+
+Both levels are deletable, and deletion is **immediate and permanent** — no trash, no undo
+snackbar, no soft-delete flag. Simpler to build and simpler to reason about; the backup ZIP is
+the safety net if something is removed by mistake.
+
+**Delete a receipt** — from the receipt detail screen, or by long-pressing its row in the
+report. Removes the row and its image file. The report's total and receipt count recompute
+immediately (they are derived from the receipt rows, never stored, so they cannot drift).
+
+**Delete a report** — from the reports list (long-press) or the report detail overflow. Removes
+the report, all of its receipts via Room's `onDelete = CASCADE`, and every one of their image
+files.
+
+Both prompt with a confirmation dialog that names what is going away — for a report, its name
+and receipt count, so "Delete *Q3 Client Trip* and its 14 receipts?" is unmistakable.
+
+**Image files need explicit cleanup.** Room's `CASCADE` deletes rows in SQLite; it knows
+nothing about files on disk. So the repository deletes the DB rows first, then the files, and
+an **orphan sweep on app start** removes any image in `filesDir/images/` with no receipt row
+pointing at it. That covers the app being killed between the two steps — the DB stays the
+single source of truth and disk usage can't creep upward from interrupted deletes.
 
 ## Export
 
@@ -217,7 +296,7 @@ and Path A remains fully functional. Nothing about the app is blocked on it.
 | --- | --- |
 | `CAMERA` | capturing receipts |
 | `INTERNET` | Drive backup only |
-| `POST_NOTIFICATIONS` | backup-complete/failed notification from the worker |
+| `POST_NOTIFICATIONS` | backup-complete/failed notification from the worker (always runtime-requested; `minSdk 33` means no legacy branch) |
 
 No storage permissions, no location, no contacts, no analytics, no crash reporting, no ads.
 
@@ -229,8 +308,8 @@ No storage permissions, no location, no contacts, no analytics, no crash reporti
 | --- | --- | --- |
 | JDK | Temurin 21.0.12 | `/opt/homebrew/opt/openjdk@21` (keg-only) |
 | Android SDK | — | `~/Library/Android/sdk` |
-| Platforms | android-36, android-37.1 | |
-| Build-tools | 36.1.0, 37.0.0 | |
+| Platforms | android-37.1 (used), android-36 (fallback) | |
+| Build-tools | 37.0.0 (used), 36.1.0 (fallback) | |
 | Platform-tools | 37.0.1 | includes `adb` |
 | cmdline-tools | via `android-commandlinetools` cask | `sdkmanager`, `avdmanager`, `apkanalyzer` on `PATH` |
 
@@ -266,8 +345,9 @@ subcommand. It still works; no need to migrate yet.
 ./gradlew assembleRelease               # signed release APK
 ```
 
-`compileSdk`/`targetSdk` start at **36** — API 37 is installed and ready, and we move up once
-the pinned AGP version officially supports it (AGP rejects a `compileSdk` it doesn't know).
+`compileSdk`/`targetSdk` are **37**, matching the target device (see [Target Device](#target-device)).
+Platform 36 and build-tools 36.1.0 are also installed as a fallback if AGP 9.3.1 turns out to
+need them.
 
 Release signing reads the keystore path and passwords from `keystore.properties`
 (gitignored) or from environment variables in CI. The keystore itself is never committed.
@@ -279,6 +359,8 @@ Release APK lands at `app/build/outputs/apk/release/app-release.apk`.
 - **Unit tests** for the pieces where a bug is silent and expensive: money parsing/formatting,
   report totalling, CSV escaping, the backup manifest round-trip (serialize → deserialize →
   identical data), and `schemaVersion` rejection.
+- **Delete tests**: deleting a report removes its receipt rows *and* their image files;
+  the orphan sweep deletes unreferenced files and leaves referenced ones alone.
 - **Room migration tests** once a schema version ships.
 - Instrumented UI tests are not part of v1. The camera and Drive paths are verified by hand
   on a real device.
@@ -286,10 +368,12 @@ Release APK lands at `app/build/outputs/apk/release/app-release.apk`.
 ## Build Phases
 
 **Phase 1 — Skeleton.** Gradle project, Compose scaffolding, Room schema, `AppContainer`,
-Reports list + Report detail with manual receipt entry (no camera). Totals correct end to end.
+Reports list + Report detail with manual receipt entry (no camera). Create, rename, and delete
+for both reports and receipts, with cascade. Totals correct end to end.
 
 **Phase 2 — Capture.** CameraX capture → crop → receipt entry flow, image storage, thumbnails,
-edit/delete/replace photo, "Save & add another".
+edit/delete/replace photo, "Save & add another", and the full-screen image viewer with
+zoom/swipe plus share and save-a-copy.
 
 **Phase 3 — Export.** PDF generation, ZIP + CSV generation, share sheet wiring.
 
@@ -316,3 +400,5 @@ Kept here so they don't leak into v1 scope:
 - Multi-currency with per-receipt currency.
 - Scheduled/automatic backup (only meaningful on Path B).
 - Mileage or per-diem line items that have no receipt image.
+- Sharing or saving out a single receipt image on its own (the ZIP export covers the need).
+- Undelete / trash for removed reports and receipts.
