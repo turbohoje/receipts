@@ -4,6 +4,8 @@ import android.content.Context
 import cc.rocketscience.receipts.data.ImageStore
 import cc.rocketscience.receipts.data.ReceiptsDatabase
 import cc.rocketscience.receipts.data.ReportRepository
+import cc.rocketscience.receipts.export.Exporter
+import cc.rocketscience.receipts.image.ImagePipeline
 import cc.rocketscience.receipts.money.Money
 import java.io.File
 import java.util.Currency
@@ -19,6 +21,10 @@ class AppContainer(context: Context) {
     val database: ReceiptsDatabase by lazy { ReceiptsDatabase.build(appContext) }
 
     val imageStore: ImageStore by lazy { ImageStore(File(appContext.filesDir, "images")) }
+
+    val imagePipeline: ImagePipeline by lazy { ImagePipeline(appContext, imageStore) }
+
+    val exporter: Exporter by lazy { Exporter(appContext, imageStore) }
 
     val repository: ReportRepository by lazy {
         ReportRepository(database.reportDao(), database.receiptDao(), imageStore)

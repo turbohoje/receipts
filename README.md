@@ -30,8 +30,10 @@ Everything works with no network connection. Drive is the only online feature.
 | Preferences | DataStore (Preferences) |
 | Camera | CameraX (`ImageCapture`) |
 | Photo picking | `ActivityResultContracts.PickVisualMedia` (no permission required) |
-| Cropping | CanHub `Android-Image-Cropper` (Apache-2.0) |
-| PDF | `android.graphics.pdf.PdfDocument` (no third-party PDF lib) |
+| Image loading | Coil 3 (`coil-compose`) |
+| EXIF | `androidx.exifinterface` |
+| Cropping | Hand-rolled Compose overlay. CanHub's cropper is gone from Maven Central, and the maintained fork is Activity-based and pulls in AppCompat, which this Compose-only app has no theme for. A receipt only needs a rectangle. |
+| PDF | `android.graphics.pdf.PdfDocument` (no third-party PDF lib), A4 at 72pt |
 | ZIP | `java.util.zip` |
 | Backup (default) | Storage Access Framework (`ACTION_CREATE_DOCUMENT` / `ACTION_OPEN_DOCUMENT`) |
 | Backup (optional) | Google Sign-In + Drive REST v3 (`drive.file` scope) |
@@ -140,11 +142,16 @@ changeable in Settings. Totals are plain sums; no FX conversion exists anywhere 
 
 ```
 filesDir/
-  images/<receiptId>.jpg      # cropped JPEG, quality 85, long edge capped at 2048px
+  images/<imageId>.jpg        # cropped JPEG, quality 85, long edge capped at 2048px
 cacheDir/
   capture/                    # raw camera output, deleted after crop is confirmed
   export/                     # generated PDFs/ZIPs, served via FileProvider, pruned on launch
 ```
+
+Images are named by their **own** id, not the receipt's. "Replace photo" therefore writes a new
+file and deletes the old one only after the swap is committed, instead of overwriting the single
+copy in place and losing it if the write fails; it also stops the image cache from serving the
+previous photo for a reused path.
 
 Images live in app-internal storage, so no `READ_MEDIA_IMAGES` permission is required and
 uninstalling the app removes them. Images leave internal storage only through `FileProvider`
@@ -242,6 +249,10 @@ single source of truth and disk usage can't creep upward from interrupted delete
 Both exports are generated into `cacheDir/export/` and handed to the Android share sheet via
 `FileProvider`, so they can go to email, Slack, Drive, or anywhere else.
 
+Images are embedded at roughly 3× the drawn page size. Rendering at 72dpi would leave a
+receipt's fine print unreadable in print, which defeats the point of attaching it; decoding
+each full-size original would risk running out of memory on a long report.
+
 **PDF** — `<report-name>-<yyyyMMdd>.pdf`
 - Page 1+: summary table — Date · Description · Amount, one row per receipt, with the grand
   total and receipt count. Rolls onto additional pages when the list is long.
@@ -265,7 +276,7 @@ paths below, so a backup made one way restores the other way.
 ```
 manifest.json           # { schemaVersion, appVersion, createdAt, currency,
                         #   reports: [...], receipts: [...] }   full DB dump
-images/<receiptId>.jpg  # every image referenced by the manifest
+images/<imageId>.jpg    # every image referenced by the manifest
 ```
 
 `schemaVersion` is checked on restore; a newer-than-known backup is refused rather than
@@ -377,11 +388,33 @@ subcommand. It still works; no need to migrate yet.
 
 ### Commands
 
+`deploy.sh` is the normal way to get a change onto the phone. It resolves `adb`, insists on
+exactly one usable device, and reports *which* problem it hit (no device, unauthorized,
+offline, more than one attached) rather than failing generically.
+
+```sh
+./deploy.sh                 # build debug, install, cold-launch
+./deploy.sh --test          # run unit tests first, abort if they fail
+./deploy.sh --clear         # wipe app data first, i.e. fresh-install behaviour
+./deploy.sh --logcat        # follow just this app's log after launching
+./deploy.sh --no-launch     # install without starting it
+./deploy.sh --release       # build the release APK only (unsigned, see below)
+./deploy.sh --uninstall     # remove the app from the device
+./deploy.sh --help
+
+ANDROID_SERIAL=67280DLKY0027G ./deploy.sh   # when several devices are attached
+```
+
+After launching it checks the crash buffer and prints anything mentioning this package, so a
+launch-time crash shows up immediately instead of looking like a successful deploy.
+
+Underlying Gradle tasks, if needed directly:
+
 ```sh
 ./gradlew assembleDebug                 # debug APK
 ./gradlew installDebug                  # build + push to a connected device
-./gradlew test                          # unit tests
-./gradlew assembleRelease               # signed release APK
+./gradlew testDebugUnitTest             # unit tests
+./gradlew assembleRelease               # release APK (unsigned until phase 5)
 ```
 
 `compileSdk`/`targetSdk` are **37**, matching the target device (see [Target Device](#target-device)).
@@ -416,6 +449,17 @@ Phase 1 is complete and running on the device. What exists today:
 - Image store and orphan sweep wired in, ready for phase 2's photos.
 - 25 unit tests over money parsing/formatting, image-store lifecycle, and delete/cascade.
 
+Phase 3 adds: **Export PDF** and **Export ZIP** in the report overflow menu (disabled on an
+empty report), generated into `cacheDir/export/` and handed to the share sheet via
+`FileProvider`. Failures surface in a snackbar rather than looking like a successful export
+that produced nothing. 70 unit tests.
+
+Phase 2 adds: the + button opens a source chooser (take a photo / choose from photos / no
+photo), CameraX capture with a hand-rolled Compose crop step, the shared EXIF-normalising
+import pipeline, thumbnails on receipt rows, add/replace photo, and a pinch-to-zoom viewer.
+31 unit tests. **Not yet verified on the device** — the camera, picker and crop paths have
+only been compiled and unit-tested so far.
+
 Release APK is currently **unsigned** — signing config lands in phase 5. Debug APK is ~32 MB;
 the minified release APK is ~2.7 MB.
 
@@ -427,12 +471,16 @@ rename, and delete for both reports and receipts, with cascade. Totals correct e
 Verified on the Pixel 11: 25 unit tests green, debug and release both assemble, and the
 create → add → delete → total flow was driven end to end on-device.
 
-**Phase 2 — Images.** The source chooser (camera / photos / none), CameraX capture, the photo
-picker, the shared import pipeline (EXIF normalisation, crop, downscale), image storage,
-row thumbnails, edit/delete/replace photo, "Save & add another", and the full-screen viewer
-with zoom and swipe.
+**Phase 2 — Images. Built, on-device verification pending.** The source chooser (camera /
+photos / none), CameraX capture, the photo picker, the shared import pipeline (EXIF
+normalisation, crop, downscale), image storage, row thumbnails, add/replace photo, and a
+pinch-zoom full-screen viewer. Still outstanding: "Save & add another", and swiping between
+receipts inside the viewer.
 
-**Phase 3 — Export.** PDF generation, ZIP + CSV generation, share sheet wiring.
+**Phase 3 — Export. ✅ Done.** PDF generation (summary pages + one captioned page per image),
+ZIP + CSV generation, `FileProvider` share-sheet wiring, export pruning at app start. Verified
+on-device: a generated PDF renders both page types correctly, and the ZIP's CSV quotes
+correctly and its images are byte-intact at the 2048px cap.
 
 **Phase 4 — Backup.** Backup ZIP writer and manifest, restore with replace-all,
 `WorkManager` wiring, Settings screen, and **Path A** (file picker) end to end. This phase

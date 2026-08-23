@@ -8,6 +8,9 @@ coreKtx = "1.19.0"
 lifecycle = "2.11.0"
 activityCompose = "1.13.0"
 navigationCompose = "2.9.8"
+camerax = "1.6.1"
+exifinterface = "1.4.2"
+coil = "3.5.0"
 junit = "4.13.2"
 
 [libraries]
@@ -29,6 +32,13 @@ androidx-compose-material-icons-core = { group = "androidx.compose.material", na
 androidx-room-runtime = { group = "androidx.room", name = "room-runtime", version.ref = "room" }
 androidx-room-ktx = { group = "androidx.room", name = "room-ktx", version.ref = "room" }
 androidx-room-compiler = { group = "androidx.room", name = "room-compiler", version.ref = "room" }
+
+androidx-camera-core = { group = "androidx.camera", name = "camera-core", version.ref = "camerax" }
+androidx-camera-camera2 = { group = "androidx.camera", name = "camera-camera2", version.ref = "camerax" }
+androidx-camera-lifecycle = { group = "androidx.camera", name = "camera-lifecycle", version.ref = "camerax" }
+androidx-camera-view = { group = "androidx.camera", name = "camera-view", version.ref = "camerax" }
+androidx-exifinterface = { group = "androidx.exifinterface", name = "exifinterface", version.ref = "exifinterface" }
+coil-compose = { group = "io.coil-kt.coil3", name = "coil-compose", version.ref = "coil" }
 
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 

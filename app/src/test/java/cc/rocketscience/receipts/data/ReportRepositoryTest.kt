@@ -32,8 +32,8 @@ class ReportRepositoryTest {
         repo = ReportRepository(db.reportDao, db.receiptDao, imageStore) { 1_000L }
     }
 
-    private fun withImage(receiptId: String): String =
-        imageStore.fileNameFor(receiptId).also { imageStore.file(it).writeText("jpeg") }
+    private fun withImage(label: String): String =
+        "img-$label.jpg".also { imageStore.file(it).writeText("jpeg") }
 
     @Test
     fun `deleting a report removes its receipts and their image files`() = runBlocking {
@@ -103,6 +103,33 @@ class ReportRepositoryTest {
         repo.deleteReceipt(receiptId)
 
         repo.deleteReceipt(receiptId) // must not throw
+    }
+
+    @Test
+    fun `replacing an image deletes the one it replaced`() = runBlocking {
+        setUp()
+        val reportId = repo.createReport("Trip")
+        val receiptId = repo.addReceipt(reportId, "Taxi", 2450, 0L)
+        val old = withImage("old").also { db.attachImage(receiptId, it) }
+        val new = withImage("new")
+
+        repo.replaceReceiptImage(receiptId, new)
+
+        assertEquals(new, db.receiptDao.findById(receiptId)?.imageFile)
+        assertFalse("the replaced file must go", imageStore.exists(old))
+        assertTrue(imageStore.exists(new))
+    }
+
+    @Test
+    fun `replacing an image with the same file keeps it`() = runBlocking {
+        setUp()
+        val reportId = repo.createReport("Trip")
+        val receiptId = repo.addReceipt(reportId, "Taxi", 2450, 0L)
+        val same = withImage("same").also { db.attachImage(receiptId, it) }
+
+        repo.replaceReceiptImage(receiptId, same)
+
+        assertTrue("must not delete the file it is being set to", imageStore.exists(same))
     }
 
     @Test

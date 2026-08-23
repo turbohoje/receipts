@@ -1,7 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <!-- No permissions in phase 1. CAMERA arrives in phase 2, INTERNET in phase 4b. -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <!-- Picking an existing image uses the system photo picker, which needs no permission. -->
+
+    <!-- Not required: a device without a camera can still import from the photo picker. -->
+    <uses-feature android:name="android.hardware.camera.any" android:required="false" />
 
     <application
         android:name=".ReceiptsApp"
@@ -21,5 +25,15 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
     </application>
 </manifest>

@@ -19,6 +19,10 @@ class ReceiptsApp : Application() {
         // was interrupted between removing rows and removing files.
         CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
             runCatching { container.repository.sweepOrphanImages() }
+            // Temp captures from a flow the user backed out of.
+            runCatching { container.imagePipeline.clearTempDir() }
+            // Exports are disposable derivatives of the database.
+            runCatching { container.exporter.pruneExports() }
         }
     }
 }

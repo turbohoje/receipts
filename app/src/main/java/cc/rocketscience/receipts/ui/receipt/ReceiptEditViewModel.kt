@@ -24,6 +24,12 @@ class ReceiptEditViewModel(
 
     val isNew: Boolean = receiptId == Routes.NEW
 
+    /** Set when arriving from the crop screen; null when entering without a photo. */
+    private val incomingImage: String? = savedStateHandle["image"]
+
+    var imageFile by mutableStateOf(incomingImage)
+        private set
+
     var description by mutableStateOf("")
         private set
     var amountText by mutableStateOf("")
@@ -43,6 +49,9 @@ class ReceiptEditViewModel(
                     description = receipt.description
                     amountText = Money.formatPlain(receipt.amountMinor, currency)
                     date = receipt.date
+                    // An image arriving via the route is a replacement and wins over the
+                    // one already on the row.
+                    if (incomingImage == null) imageFile = receipt.imageFile
                 }
             }
         }
@@ -75,6 +84,7 @@ class ReceiptEditViewModel(
                     description = description,
                     amountMinor = amountMinor,
                     date = date,
+                    imageFile = imageFile,
                 )
             } else {
                 repository.updateReceipt(
@@ -84,6 +94,11 @@ class ReceiptEditViewModel(
                         date = date,
                     )
                 )
+                // Separate call: swapping the image also deletes the file it replaced.
+                val newImage = imageFile
+                if (newImage != null && newImage != current.imageFile) {
+                    repository.replaceReceiptImage(current.id, newImage)
+                }
             }
             onDone()
         }

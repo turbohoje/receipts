@@ -10,7 +10,13 @@ class ImageStore(private val dir: File) {
 
     fun ensureDir(): File = dir.apply { if (!exists()) mkdirs() }
 
-    fun fileNameFor(receiptId: String): String = "$receiptId.jpg"
+    /**
+     * Images are named by their own id, not the receipt's. That way "replace photo" writes a
+     * new file and only deletes the old one after the swap has been committed, instead of
+     * overwriting the single copy in place and losing it if the write fails. It also stops
+     * an image cache from serving the previous photo for a path that was reused.
+     */
+    fun newImageFileName(): String = "${java.util.UUID.randomUUID()}.jpg"
 
     fun file(fileName: String): File = File(ensureDir(), fileName)
 

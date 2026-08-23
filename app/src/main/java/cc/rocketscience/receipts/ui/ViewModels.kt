@@ -12,7 +12,12 @@ import cc.rocketscience.receipts.ui.reports.ReportsListViewModel
 fun appViewModelFactory(container: AppContainer) = viewModelFactory {
     initializer { ReportsListViewModel(container.repository, container.currency) }
     initializer {
-        ReportDetailViewModel(createSavedStateHandle(), container.repository, container.currency)
+        ReportDetailViewModel(
+            createSavedStateHandle(),
+            container.repository,
+            container.exporter,
+            container.currency,
+        )
     }
     initializer {
         ReceiptEditViewModel(createSavedStateHandle(), container.repository, container.currency)

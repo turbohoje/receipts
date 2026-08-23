@@ -43,6 +43,9 @@ class ReportRepository(
     fun observeReceipts(reportId: String): Flow<List<Receipt>> =
         receiptDao.observeForReport(reportId)
 
+    /** One-shot read, for jobs like export that must not depend on a UI snapshot. */
+    suspend fun receiptsOnce(reportId: String): List<Receipt> = receiptDao.listForReport(reportId)
+
     fun observeReceipt(receiptId: String): Flow<Receipt?> = receiptDao.observeById(receiptId)
 
     suspend fun findReceipt(receiptId: String): Receipt? = receiptDao.findById(receiptId)
@@ -74,6 +77,23 @@ class ReportRepository(
         receiptDao.upsert(receipt.copy(description = receipt.description.trim()))
         touch(receipt.reportId)
     }
+
+    /**
+     * Points a receipt at a new image and deletes the one it replaced.
+     *
+     * The row is updated first: if the process dies before the old file is removed, the
+     * startup orphan sweep collects it. The reverse order could delete the only copy while
+     * the row still referenced it.
+     */
+    suspend fun replaceReceiptImage(receiptId: String, imageFile: String) {
+        val receipt = receiptDao.findById(receiptId) ?: return
+        val previous = receipt.imageFile
+        receiptDao.upsert(receipt.copy(imageFile = imageFile))
+        if (previous != null && previous != imageFile) imageStore.delete(previous)
+        touch(receipt.reportId)
+    }
+
+    fun imageFile(fileName: String) = imageStore.file(fileName)
 
     suspend fun deleteReceipt(receiptId: String) {
         val receipt = receiptDao.findById(receiptId) ?: return

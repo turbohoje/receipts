@@ -67,7 +67,10 @@ class ImageStoreTest {
     }
 
     @Test
-    fun `image name is derived from the receipt id`() {
-        assertEquals("abc-123.jpg", store().fileNameFor("abc-123"))
+    fun `generated image names are unique and jpg`() {
+        val store = store()
+        val names = (1..50).map { store.newImageFileName() }
+        assertEquals("names must not collide", 50, names.toSet().size)
+        assertTrue(names.all { it.endsWith(".jpg") })
     }
 }
