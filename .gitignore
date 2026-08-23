@@ -52,3 +52,6 @@ lint-results*.txt
 .Spotlight-V100
 .Trashes
 Thumbs.db
+
+# Device data dumps (contain real receipts)
+device-backups/

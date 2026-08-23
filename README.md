@@ -37,7 +37,7 @@ Everything works with no network connection. Drive is the only online feature.
 | ZIP | `java.util.zip` |
 | Backup (default) | Storage Access Framework (`ACTION_CREATE_DOCUMENT` / `ACTION_OPEN_DOCUMENT`) |
 | Backup (optional) | Google Sign-In + Drive REST v3 (`drive.file` scope) |
-| Background work | WorkManager |
+| Background work | none — see the note under [Backup & Restore](#backup--restore) |
 | Build | Gradle (Kotlin DSL) with wrapper |
 
 `minSdk 33` (Android 13) · `targetSdk 37` · `compileSdk 37` · JDK 21 toolchain.
@@ -280,9 +280,25 @@ images/<imageId>.jpg    # every image referenced by the manifest
 ```
 
 `schemaVersion` is checked on restore; a newer-than-known backup is refused rather than
-half-imported. Restore **replaces all local data** after an explicit confirmation —
-merge-on-restore is not supported. Both paths run in a `WorkManager` worker so they survive
-the app being backgrounded.
+half-imported, and the check happens before a single image is written so a refusal leaves
+nothing behind. Restore **replaces all local data** after an explicit confirmation —
+merge-on-restore is not supported.
+
+The database is replaced inside a transaction, so it is all-or-nothing; images follow. If the
+process dies between the two, rows point at images that are not there yet, which renders as the
+missing-image placeholder and is fixed by restoring again. The reverse order would instead
+delete the images belonging to rows that are still live.
+
+**Deviation from the original plan: no `WorkManager`.** These operations take a couple of
+seconds for a realistic report, and a `viewModelScope` job already survives the app being
+backgrounded — only process death interrupts it, and the remedy there is to run the backup
+again. Adding a worker, its notification channel and the `POST_NOTIFICATIONS` permission would
+buy very little; the permission is consequently **not** requested. Revisit if reports ever get
+big enough that a backup takes long enough to care about.
+
+Untrusted-input note: image entry names in a backup are reduced to their bare filename on
+extraction, so an entry called `images/../../databases/receipts.db` cannot write outside the
+image directory.
 
 ### Path A — File picker (default, zero setup)
 
@@ -332,8 +348,13 @@ Console steps, for reference: create a project → enable the **Google Drive API
 the OAuth consent screen and add the account as a test user → create an **OAuth 2.0 Client
 ID → Android** with the package name and SHA-1 from step 2.
 
-Until this is done, Settings shows Path B as "Not set up" with a link to the setup screen,
+Until this is done, Path B fails with Google's own message plus a pointer to the setup screen,
 and Path A remains fully functional. Nothing about the app is blocked on it.
+
+**Status.** Built and wired. The authorization handshake was verified as far as Google's own
+account-consent screen; completing it needs a real Google account and the Console registration
+above, so it is left to the owner. Cancelling out reports "Google Drive access was not
+granted." rather than hanging.
 
 ## Permissions
 
@@ -421,10 +442,96 @@ Underlying Gradle tasks, if needed directly:
 Platform 36 and build-tools 36.1.0 are also installed as a fallback if AGP 9.3.1 turns out to
 need them.
 
-Release signing reads the keystore path and passwords from `keystore.properties`
-(gitignored) or from environment variables in CI. The keystore itself is never committed.
+### Release signing
 
-Release APK lands at `app/build/outputs/apk/release/app-release.apk`.
+`keystore.properties` (gitignored) supplies the keystore; failing that, the environment
+variables `RECEIPTS_STORE_FILE`, `RECEIPTS_STORE_PASSWORD`, `RECEIPTS_KEY_ALIAS` and
+`RECEIPTS_KEY_PASSWORD`. With neither, the release build still succeeds but is **unsigned**
+and logs a warning, rather than failing the whole project.
+
+```sh
+keytool -genkeypair -keystore receipts-release.jks -alias receipts \
+        -keyalg RSA -keysize 4096 -validity 10000
+```
+
+**Back up `receipts-release.jks` and `keystore.properties` together, outside this repo.** Both
+are gitignored and neither is recoverable. Losing them means the app can only be reinstalled by
+uninstalling first, which erases its data.
+
+Signed with **v3 only**: v1 is irrelevant above `minSdk 24`, and every device at `minSdk 33`
+supports v3, which additionally allows key rotation later.
+
+Release APK lands at `app/build/outputs/apk/release/app-release.apk` — currently **3.9 MB**,
+against 44.6 MB for the debug build.
+
+### Verified properties of the release APK
+
+Checked with `apksigner` and `aapt2 dump badging`:
+
+| | |
+| --- | --- |
+| Signature | verifies, v3, RSA 4096 |
+| `package` | `cc.rocketscience.receipts`, versionCode 1, versionName 0.1.0 |
+| SDK | `minSdkVersion 33`, `targetSdkVersion 37` |
+| Debuggable | absent |
+| Permissions | `CAMERA` only |
+| R8 | clean — no missing-class warnings; a single `classes.dex` |
+
+**On permissions:** the first signed build also declared `ACCESS_NETWORK_STATE`, which nothing
+in this app needs. It came from `camera-view` → `camera-video` → `androidx.media3`, and since
+only `PreviewView` is used and never video capture, `camera-video` is now excluded in
+`app/build.gradle.kts`. That drops the permission and the media3 code with it. The only other
+entry, `…DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION`, is a signature-level self-permission added
+by `androidx.core`; it is never shown to the user and cannot be removed.
+
+### On-device pass over the release build
+
+Every path below was driven through the signed release APK on the Pixel 11, with zero crashes:
+launch and empty state, report create/open, the + source chooser, camera permission, live
+preview, capture → crop → save, corner-drag on the crop overlay, the photo picker → crop →
+save, Coil thumbnails, totals (including a grouped `1,299.00` input), the keyboard not
+occluding a focused field, the full-screen viewer with double-tap zoom, Export PDF and
+Export ZIP (both reaching the share sheet with correctly slugged filenames), and delete with
+cascade.
+
+It also found a bug that neither the unit tests nor the debug flow had surfaced: **the camera
+preview was black because the camera opened and closed immediately.** The
+`ProcessCameraProvider` was held in a `mutableStateOf` and released from a
+`DisposableEffect(provider)`; since `provider` was a state delegate, `onDispose` read its value
+at *dispose* time, so the instant it flipped from null to the real provider the key changed,
+the old effect disposed, and it unbound the camera that was still being bound. Bind and unbind
+now live in one `LaunchedEffect` with the provider in a local `val`, held open with
+`awaitCancellation()` — no key, no race.
+
+### Device data: `device-data.sh`
+
+A stopgap until phase 4, and the safety net for switching between debug and release builds:
+
+```sh
+./device-data.sh backup [dir]    # database + images, with SHA-256 manifest
+./device-data.sh verify <dir>
+./device-data.sh restore <dir>
+```
+
+Requires a **debuggable** build installed, because it works through `adb run-as` — so it cannot
+read or write a release build's data.
+
+Two things learned building it, both of which had to be fixed:
+
+- **Anything that opens a WAL-mode SQLite database rewrites it.** The summary step opened the
+  backup with `sqlite3`, which checkpointed the WAL into the main file and deleted the
+  `-wal`/`-shm` beside it on close — leaving the manifest describing a state the backup was no
+  longer in. The checkpoint is now done deliberately, and checksums are written last.
+- **A freshly installed build has no `databases/` directory.** Room creates it lazily on first
+  open, so restore has to create it rather than assume it.
+
+### Installing a release build erases device data
+
+Debug and release are signed with different keys, so Android will not upgrade one to the other
+in place — the existing app has to be uninstalled, which takes the database and every stored
+image with it. **There is no restore path until phase 4 ships.** `./deploy.sh --release
+--install` therefore requires typing `ERASE` to proceed. Build phase 4 before switching the
+device over to release builds.
 
 ## Testing
 
@@ -460,8 +567,17 @@ import pipeline, thumbnails on receipt rows, add/replace photo, and a pinch-to-z
 31 unit tests. **Not yet verified on the device** — the camera, picker and crop paths have
 only been compiled and unit-tested so far.
 
-Release APK is currently **unsigned** — signing config lands in phase 5. Debug APK is ~32 MB;
-the minified release APK is ~2.7 MB.
+Phase 5 adds: a real signing config, a **signed** 3.9 MB release APK (v3, RSA 4096) verified
+to be non-debuggable and to declare only `CAMERA`, R8 with a minimal rule set, and a guarded
+`--release --install` in `deploy.sh`.
+
+Phase 4 adds: a **Settings** screen (reached from the reports list), backup and restore via the
+system file picker (no setup, verified on device), and the Google Drive path — authorize,
+upload, list, restore, prune — plus a setup screen that reads the running build's own package
+name and SHA-1 for pasting into the Cloud Console.
+
+All phases are now complete. Drive (Path B) needs a one-time Google Cloud registration before
+it will function; everything else works as installed.
 
 ## Build Phases
 
@@ -482,16 +598,16 @@ ZIP + CSV generation, `FileProvider` share-sheet wiring, export pruning at app s
 on-device: a generated PDF renders both page types correctly, and the ZIP's CSV quotes
 correctly and its images are byte-intact at the 2048px cap.
 
-**Phase 4 — Backup.** Backup ZIP writer and manifest, restore with replace-all,
-`WorkManager` wiring, Settings screen, and **Path A** (file picker) end to end. This phase
-delivers working backup/restore with no external setup.
+**Phase 4 — Backup. ✅ Done.** Backup ZIP writer and manifest, restore with replace-all,
+Settings screen, **Path A** (file picker) verified end to end on device, and **Path B** (Drive
+API) built: `drive.file` authorization, folder creation, multipart upload, backup listing,
+download-and-restore, pruning to the newest 10, plus the setup screen with the live SHA-1
+readout and "Test connection".
 
-**Phase 4b — Drive API.** Google Sign-In, `drive.file` upload, backup listing, retention
-pruning, and the in-app setup screen with the live SHA-1 readout and "Test connection".
-Gated behind the registration; skippable without affecting anything else.
-
-**Phase 5 — Release.** Release signing, icon and app name, `assembleRelease`, on-device pass
-over the whole flow.
+**Phase 5 — Release. ✅ Done.** Release signing wired to a gitignored `keystore.properties`
+(or CI environment variables), v3 signature verified, R8 enabled with a minimal rule set,
+`ACCESS_NETWORK_STATE` traced and removed, guarded release install in `deploy.sh`. A full
+on-device pass was run against the signed release build — see below.
 
 ## Later, Explicitly Not Now
 

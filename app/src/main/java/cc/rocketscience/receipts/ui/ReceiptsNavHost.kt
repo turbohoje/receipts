@@ -14,6 +14,8 @@ import cc.rocketscience.receipts.ui.crop.CropScreen
 import cc.rocketscience.receipts.ui.receipt.ReceiptEditScreen
 import cc.rocketscience.receipts.ui.report.ReportDetailScreen
 import cc.rocketscience.receipts.ui.reports.ReportsListScreen
+import cc.rocketscience.receipts.ui.settings.DriveSetupScreen
+import cc.rocketscience.receipts.ui.settings.SettingsScreen
 
 object Routes {
     const val REPORTS = "reports"
@@ -21,6 +23,8 @@ object Routes {
     const val RECEIPT = "receipt/{reportId}/{receiptId}?image={image}"
     const val CAPTURE = "capture/{reportId}/{receiptId}"
     const val CROP = "crop/{reportId}/{receiptId}/{temp}"
+    const val SETTINGS = "settings"
+    const val DRIVE_SETUP = "settings/drive"
 
     /** Sentinel for "this receipt does not exist yet". */
     const val NEW = "new"
@@ -47,6 +51,22 @@ fun ReceiptsNavHost(container: AppContainer) {
             ReportsListScreen(
                 factory = factory,
                 onOpenReport = { navController.navigate(Routes.report(it)) },
+                onOpenSettings = { navController.navigate(Routes.SETTINGS) },
+            )
+        }
+
+        composable(Routes.SETTINGS) {
+            SettingsScreen(
+                factory = factory,
+                onBack = { navController.popBackStack() },
+                onOpenDriveSetup = { navController.navigate(Routes.DRIVE_SETUP) },
+            )
+        }
+
+        composable(Routes.DRIVE_SETUP) {
+            DriveSetupScreen(
+                factory = factory,
+                onBack = { navController.popBackStack() },
             )
         }
 

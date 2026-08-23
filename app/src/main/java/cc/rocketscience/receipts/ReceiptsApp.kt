@@ -23,6 +23,8 @@ class ReceiptsApp : Application() {
             runCatching { container.imagePipeline.clearTempDir() }
             // Exports are disposable derivatives of the database.
             runCatching { container.exporter.pruneExports() }
+            // Half-finished backups or restores.
+            runCatching { container.contentIo.clearTemp() }
         }
     }
 }

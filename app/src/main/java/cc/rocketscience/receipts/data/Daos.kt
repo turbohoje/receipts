@@ -1,6 +1,7 @@
 package cc.rocketscience.receipts.data
 
 import androidx.room.Dao
+import androidx.room.Insert
 import androidx.room.Query
 import androidx.room.Upsert
 import kotlinx.coroutines.flow.Flow
@@ -53,6 +54,18 @@ interface ReportDao {
 
     @Query("DELETE FROM reports WHERE id = :reportId")
     suspend fun deleteById(reportId: String)
+
+    // ----- backup / restore -----
+
+    @Query("SELECT * FROM reports ORDER BY createdAt")
+    suspend fun all(): List<Report>
+
+    /** Cascades to receipts. Used only by restore, which replaces everything. */
+    @Query("DELETE FROM reports")
+    suspend fun deleteAll()
+
+    @Insert
+    suspend fun insertAll(reports: List<Report>)
 }
 
 @Dao
@@ -86,4 +99,10 @@ interface ReceiptDao {
 
     @Query("DELETE FROM receipts WHERE id = :receiptId")
     suspend fun deleteById(receiptId: String)
+
+    @Query("SELECT * FROM receipts ORDER BY date, createdAt")
+    suspend fun all(): List<Receipt>
+
+    @Insert
+    suspend fun insertAll(receipts: List<Receipt>)
 }

@@ -2,6 +2,8 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <uses-permission android:name="android.permission.CAMERA" />
+    <!-- Drive backup only. Nothing else in the app touches the network. -->
+    <uses-permission android:name="android.permission.INTERNET" />
     <!-- Picking an existing image uses the system photo picker, which needs no permission. -->
 
     <!-- Not required: a device without a camera can still import from the photo picker. -->

@@ -7,6 +7,7 @@ import cc.rocketscience.receipts.AppContainer
 import cc.rocketscience.receipts.ui.receipt.ReceiptEditViewModel
 import cc.rocketscience.receipts.ui.report.ReportDetailViewModel
 import cc.rocketscience.receipts.ui.reports.ReportsListViewModel
+import cc.rocketscience.receipts.ui.settings.SettingsViewModel
 
 /** One factory for the whole app; keeps manual DI to a single place. */
 fun appViewModelFactory(container: AppContainer) = viewModelFactory {
@@ -21,5 +22,15 @@ fun appViewModelFactory(container: AppContainer) = viewModelFactory {
     }
     initializer {
         ReceiptEditViewModel(createSavedStateHandle(), container.repository, container.currency)
+    }
+    initializer {
+        SettingsViewModel(
+            backups = container.backupManager,
+            settings = container.settings,
+            contentIo = container.contentIo,
+            driveAuth = container.driveAuth,
+            driveClient = container.driveClient,
+            currency = container.currency,
+        )
     }
 }

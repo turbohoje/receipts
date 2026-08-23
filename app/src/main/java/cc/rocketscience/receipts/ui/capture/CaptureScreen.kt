@@ -34,7 +34,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -44,10 +43,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.awaitCancellation
 import cc.rocketscience.receipts.image.ImagePipeline
 import java.util.concurrent.Executor
 
@@ -111,19 +112,24 @@ private fun CameraPreview(
     val previewView = remember {
         PreviewView(context).apply { scaleType = PreviewView.ScaleType.FILL_CENTER }
     }
-    var provider by remember { mutableStateOf<ProcessCameraProvider?>(null) }
-
+    // Bind and unbind in one effect, holding the provider in a local val.
+    //
+    // The previous version kept it in a mutableStateOf and released it from a
+    // DisposableEffect(provider). Because `provider` was a state delegate, onDispose read its
+    // value at dispose time rather than at creation time — so the moment it flipped from null
+    // to the real provider, the key changed, the old effect disposed, and it unbound the
+    // camera that this coroutine was still in the middle of binding. The camera opened and
+    // immediately closed, leaving a black preview.
     LaunchedEffect(Unit) {
         val cameraProvider = runCatching { ProcessCameraProvider.awaitInstance(context) }
             .getOrElse {
                 error = "Could not open the camera: ${it.message}"
                 return@LaunchedEffect
             }
-        provider = cameraProvider
         val preview = Preview.Builder().build().also {
             it.surfaceProvider = previewView.surfaceProvider
         }
-        runCatching {
+        try {
             cameraProvider.unbindAll()
             cameraProvider.bindToLifecycle(
                 lifecycleOwner,
@@ -131,12 +137,15 @@ private fun CameraPreview(
                 preview,
                 imageCapture,
             )
-        }.onFailure { error = "Could not open the camera: ${it.message}" }
-    }
-
-    // Release the camera on the way out; never block the main thread waiting for the provider.
-    DisposableEffect(provider) {
-        onDispose { provider?.unbindAll() }
+            // Hold the binding for as long as this screen is composed.
+            awaitCancellation()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            error = "Could not open the camera: ${e.message}"
+        } finally {
+            cameraProvider.unbindAll()
+        }
     }
 
     imageCapture.flashMode =

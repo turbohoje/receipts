@@ -7,7 +7,11 @@
 #   ./deploy.sh --clear         wipe app data before launching (fresh-install behaviour)
 #   ./deploy.sh --no-launch     install but don't start the app
 #   ./deploy.sh --logcat        follow the app's log after launching (Ctrl-C to stop)
-#   ./deploy.sh --release       build the release APK only (unsigned; cannot be installed yet)
+#   ./deploy.sh --release       build the signed release APK (does not install it)
+#   ./deploy.sh --release --install
+#                               also install it. DESTRUCTIVE: debug and release are signed
+#                               with different keys, so Android requires an uninstall first,
+#                               which erases all reports, receipts and images on the device.
 #   ./deploy.sh --uninstall     remove the app from the device and exit
 #
 # Target a specific device when more than one is attached:
@@ -25,6 +29,7 @@ do_launch=true
 do_clear=false
 do_logcat=false
 do_release=false
+do_install_release=false
 do_uninstall=false
 
 while [[ $# -gt 0 ]]; do
@@ -34,6 +39,7 @@ while [[ $# -gt 0 ]]; do
         --no-launch) do_launch=false ;;
         --logcat)    do_logcat=true ;;
         --release)   do_release=true ;;
+        --install)   do_install_release=true ;;
         --uninstall) do_uninstall=true ;;
         # Print the header comment block, stopping at the first non-comment line.
         -h|--help)   awk 'NR>1 { if ($0 !~ /^#/) exit; sub(/^# ?/, ""); print }' "$0"; exit 0 ;;
@@ -112,11 +118,40 @@ adb() { "$ADB_BIN" -s "$DEVICE_SERIAL" "$@"; }
 if $do_release; then
     step "Building release APK"
     ./gradlew :app:assembleRelease
-    apk="app/build/outputs/apk/release/app-release-unsigned.apk"
-    [[ -f "$apk" ]] || apk="$(find app/build/outputs/apk/release -name '*.apk' | head -1)"
+    apk="$(find app/build/outputs/apk/release -name 'app-release*.apk' | head -1)"
+    [[ -f "$apk" ]] || die "no release APK was produced"
     printf '%s\n' "${dim}$(ls -lh "$apk" | awk '{print $5, $9}')${off}"
-    warn "Release APK is unsigned and cannot be installed. Signing arrives in phase 5;"
-    warn "use ./deploy.sh (debug) to run on the device."
+
+    if [[ "$apk" == *unsigned* ]]; then
+        warn "This APK is unsigned: keystore.properties is missing or points at a keystore"
+        warn "that is not there. See keystore.properties.example. It cannot be installed."
+        exit 0
+    fi
+
+    if ! $do_install_release; then
+        step "Signed. Not installing (pass --install to install it)."
+        exit 0
+    fi
+
+    require_device
+    # Debug and release carry different signatures, so Android will not upgrade one to the
+    # other in place. The uninstall takes the database and every stored image with it, and
+    # there is no restore path until backup ships, so make the cost explicit and require
+    # the user to type it out.
+    warn "Installing the release build must uninstall the debug build first."
+    warn "That ERASES every report, receipt and image currently on ${DEVICE_SERIAL}."
+    printf 'Type ERASE to continue: '
+    read -r confirmation
+    if [[ "$confirmation" != "ERASE" ]]; then
+        die "Cancelled; nothing was changed on the device."
+    fi
+
+    step "Uninstalling the existing build"
+    adb uninstall "$PACKAGE" || warn "was not installed"
+    step "Installing the release APK"
+    adb install "$apk"
+    step "Launching $PACKAGE"
+    adb shell am start -S -W -n "${PACKAGE}/${ACTIVITY}" | tr -d '\r' | sed "s/^/${dim}/;s/$/${off}/"
     exit 0
 fi
 
