@@ -1,6 +1,7 @@
 package cc.rocketscience.receipts.ui.settings
 
 import android.app.PendingIntent
+import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.runtime.getValue
@@ -13,6 +14,8 @@ import cc.rocketscience.receipts.backup.ContentIo
 import cc.rocketscience.receipts.backup.RestoreProblem
 import cc.rocketscience.receipts.backup.RestoreResult
 import cc.rocketscience.receipts.backup.drive.DriveAuth
+import cc.rocketscience.receipts.backup.drive.DriveDiagnostic
+import cc.rocketscience.receipts.backup.drive.DriveDiagnostics
 import cc.rocketscience.receipts.backup.drive.DriveClient
 import cc.rocketscience.receipts.backup.drive.DriveException
 import cc.rocketscience.receipts.backup.drive.DriveFile
@@ -24,6 +27,7 @@ import kotlinx.coroutines.launch
 import java.util.Currency
 
 class SettingsViewModel(
+    private val context: Context,
     private val backups: BackupManager,
     private val settings: SettingsStore,
     private val contentIo: ContentIo,
@@ -42,7 +46,7 @@ class SettingsViewModel(
         private set
     var status by mutableStateOf<String?>(null)
         private set
-    var problem by mutableStateOf<String?>(null)
+    var problem by mutableStateOf<DriveDiagnostic?>(null)
         private set
     var driveBackups by mutableStateOf<List<DriveFile>>(emptyList())
         private set
@@ -50,6 +54,10 @@ class SettingsViewModel(
         private set
 
     fun clearMessages() { status = null; problem = null }
+
+    private fun fail(summary: String, detail: String? = null) {
+        problem = DriveDiagnostic(summary, detail ?: summary)
+    }
 
     /** Suggested filename for the file-picker path. */
     fun suggestedFileName(): String = backups.fileName()
@@ -78,7 +86,16 @@ class SettingsViewModel(
                             ""
                         }
                 },
-                onFailure = { problem = "Backup failed: ${it.message}" },
+                onFailure = {
+                    fail(
+                        "Backup failed: ${it.message}",
+                        buildString {
+                            appendLine("Stage: building or writing the backup file")
+                            appendLine("Message: ${it.message}")
+                            append("Type: ${it::class.qualifiedName}")
+                        },
+                    )
+                },
             )
             busy = false
         }
@@ -90,7 +107,11 @@ class SettingsViewModel(
         viewModelScope.launch {
             val local = contentIo.copyToTemp(source, "restore.zip")
             if (local == null) {
-                problem = "Could not read that file."
+                fail(
+                    "Could not read that file.",
+                    "Stage: copying the chosen file into app storage\n" +
+                        "The picker returned a location this app could not open.",
+                )
                 busy = false
                 return@launch
             }
@@ -105,8 +126,8 @@ class SettingsViewModel(
             is RestoreResult.Success -> status = with(result.summary) {
                 "Restored $reports report(s), $receipts receipt(s) and $images image(s)."
             }
-            is RestoreResult.Refused -> problem = describe(result.problem)
-            is RestoreResult.Failed -> problem = "Restore failed: ${result.detail}"
+            is RestoreResult.Refused -> fail(describe(result.problem), "Stage: validating the backup\n${result.problem}")
+            is RestoreResult.Failed -> fail("Restore failed: ${result.detail}", "Stage: applying the backup\n${result.detail}")
         }
     }
 
@@ -196,7 +217,7 @@ class SettingsViewModel(
                     // busy stays true until the consent result comes back.
                 }
                 is DriveAuth.Result.Failed -> {
-                    problem = driveAuthAdvice(auth)
+                    problem = DriveDiagnostics.forAuthFailure(context, auth.message, auth.statusCode)
                     busy = false
                 }
             }
@@ -211,40 +232,39 @@ class SettingsViewModel(
                 is DriveAuth.Result.Token ->
                     if (action != null) runDrive(auth.accessToken, action) else busy = false
                 is DriveAuth.Result.Failed -> {
-                    problem = driveAuthAdvice(auth)
+                    problem = DriveDiagnostics.forAuthFailure(context, auth.message, auth.statusCode)
                     busy = false
                 }
                 is DriveAuth.Result.NeedsConsent -> {
-                    problem = "Google asked for consent again; try once more."
+                    fail(
+                        "Google asked for consent again; try once more.",
+                        "Stage: consent result\nGoogle returned another consent request " +
+                            "instead of a token.",
+                    )
                     busy = false
                 }
             }
         }
     }
 
-    fun onConsentCancelled() {
+    /**
+     * The consent screen closed without a token.
+     *
+     * This used to assert "Google Drive access was not granted", which claimed an intent the
+     * app cannot observe: a real failure — a build Google has no OAuth client for, most often —
+     * arrives here identically to someone tapping Back. The result is now parsed instead.
+     */
+    fun onConsentCancelled(resultCode: Int, data: Intent?) {
         pending = null
         busy = false
-        problem = "Google Drive access was not granted."
+        problem = DriveDiagnostics.forConsentResult(context, resultCode, data)
     }
 
     private suspend fun runDrive(token: String, action: suspend (String) -> Unit) {
         runCatching { action(token) }.onFailure { error ->
-            problem = when (error) {
-                is DriveException -> "Drive error ${error.status ?: ""}: ${error.message}".trim()
-                else -> "Drive failed: ${error.message}"
-            }
+            problem = DriveDiagnostics.forDriveError(context, error)
         }
         busy = false
     }
 
-    private fun driveAuthAdvice(failed: DriveAuth.Result.Failed): String = buildString {
-        append("Google sign-in failed: ${failed.message}")
-        failed.statusCode?.let { append(" (code $it)") }
-        append(
-            "\n\nIf this build was installed from a different signing key than the one " +
-                "registered with Google, Drive backup will not work for it. " +
-                "\"Back up to a file\" works regardless."
-        )
-    }
 }

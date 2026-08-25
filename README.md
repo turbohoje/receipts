@@ -353,8 +353,11 @@ and Path A remains fully functional. Nothing about the app is blocked on it.
 URLs are published at <https://rocketscience.cc/privacy.html> and
 <https://rocketscience.cc/terms.html>. Failures report Google's own message, because an
 unenabled API, an unregistered fingerprint and an unlisted test user each need a different fix.
-Cancelling the consent screen reports "Google Drive access was not granted." rather than
-hanging.
+Failures are reported with a plain-language summary plus a **"More info"** disclosure carrying
+the stage, Google's status code and name, and the running build's package name, build type and
+signing SHA-1 — which is what identifies the most common cause, a fingerprint that is not the
+one registered. "Copy details" copies the block. See
+[`docs/google-drive-setup.md`](docs/google-drive-setup.md).
 
 ## Permissions
 

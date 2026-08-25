@@ -25,6 +25,7 @@ fun appViewModelFactory(container: AppContainer) = viewModelFactory {
     }
     initializer {
         SettingsViewModel(
+            context = container.appContext,
             backups = container.backupManager,
             settings = container.settings,
             contentIo = container.contentIo,

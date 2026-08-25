@@ -22,7 +22,7 @@ import java.util.Currency
  */
 class AppContainer(context: Context) {
 
-    private val appContext = context.applicationContext
+    val appContext: Context = context.applicationContext
 
     val database: ReceiptsDatabase by lazy { ReceiptsDatabase.build(appContext) }
 

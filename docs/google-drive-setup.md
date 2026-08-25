@@ -107,6 +107,16 @@ export JAVA_HOME=/opt/homebrew/opt/openjdk@21
 5. **Create credentials → OAuth client ID → Android**, with the package name and the SHA-1 of
    the build in question. Repeat for the second fingerprint.
 
+### Switching between debug and release builds
+
+The two are signed with different keys, so **Android cannot upgrade one to the other in
+place** — the installed app must be uninstalled first, which erases its data. Two consequences:
+
+- Whichever build you run needs *its own* OAuth client, or Drive will fail on it.
+- `./deploy.sh --release --install` upgrades in place when a release build is already
+  installed (data preserved) and only demands a typed `ERASE` when the signatures genuinely
+  differ. Back up first either way: **Settings → Back up to a file**.
+
 ### If the app is ever shipped through Google Play
 
 Play App Signing **re-signs** the APK, so the fingerprint that matters becomes Play's, not the
@@ -116,15 +126,23 @@ local keystore's. Take it from Play Console → *App integrity* and register tha
 
 Errors surface in Settings with Google's own message, because the causes need different fixes.
 
+**Start in the app:** Settings → the red notice → **More info**. It reports the stage, the
+Google status code and name, and — most usefully — the package name, build type and signing
+SHA-1 of the build actually running. Compare that SHA-1 with what is registered; a mismatch is
+the most common cause and nothing else will fix it. "Copy details" puts the whole block on the
+clipboard.
+
 | Symptom | Likely cause |
 | --- | --- |
-| Sign-in fails immediately, before any account chooser | No OAuth client for this package + SHA-1 pair. Check which build is installed. |
-| Worked on debug, fails on release (or the reverse) | Only one fingerprint is registered. |
+| `DEVELOPER_ERROR` (status 10) | **The usual one.** No OAuth client matches this build's package + SHA-1. Check the fingerprint under "More info" against the Console. |
+| Sign-in fails immediately, before any account chooser | Same as above. |
+| Worked on debug, fails on release (or the reverse) | Only one fingerprint is registered. Both builds need their own client. |
+| `CANCELED` (status 16) | The consent screen was dismissed. Not an error. |
 | `HTTP 403: … has not been used in project … or it is disabled` | Drive API not enabled on the project. |
 | `HTTP 403: insufficient authentication scopes` | Grant is stale — revoke at [myaccount.google.com/permissions](https://myaccount.google.com/permissions) and retry. |
 | Consent screen appears, then access denied | Account is not on the test-user list while status is Testing. |
 | Access stops working after about a week | Testing-mode token lifetime. Publish the consent screen. |
-| "Google Drive access was not granted." | The consent screen was cancelled. Not an error. |
+| `SIGN_IN_REQUIRED` (status 4) | No Google account available to the app on this device. |
 
 ## 5. Revoking
 

@@ -134,22 +134,33 @@ if $do_release; then
     fi
 
     require_device
-    # Debug and release carry different signatures, so Android will not upgrade one to the
-    # other in place. The uninstall takes the database and every stored image with it, and
-    # there is no restore path until backup ships, so make the cost explicit and require
-    # the user to type it out.
-    warn "Installing the release build must uninstall the debug build first."
-    warn "That ERASES every report, receipt and image currently on ${DEVICE_SERIAL}."
-    printf 'Type ERASE to continue: '
-    read -r confirmation
-    if [[ "$confirmation" != "ERASE" ]]; then
-        die "Cancelled; nothing was changed on the device."
-    fi
 
-    step "Uninstalling the existing build"
-    adb uninstall "$PACKAGE" || warn "was not installed"
-    step "Installing the release APK"
-    adb install "$apk"
+    # An in-place upgrade only fails when the signing keys differ. If a release build is
+    # already installed, this APK carries the same signature and upgrades cleanly with data
+    # intact, so there is no reason to make the user type ERASE for it.
+    if adb install -r "$apk" 2>/tmp/receipts-install-err; then
+        step "Upgraded in place; app data preserved"
+    else
+        if ! grep -q "INSTALL_FAILED_UPDATE_INCOMPATIBLE\|signatures do not match" /tmp/receipts-install-err; then
+            cat /tmp/receipts-install-err >&2
+            die "Install failed."
+        fi
+        # Signatures differ, which means a debug build is installed. Android cannot upgrade
+        # across signing keys, so the existing app has to go — taking the database and every
+        # stored image with it. Make the cost explicit.
+        warn "A differently-signed build (debug) is installed, so it must be removed first."
+        warn "That ERASES every report, receipt and image currently on ${DEVICE_SERIAL}."
+        warn "Back it up first:  ./device-data.sh backup"
+        printf 'Type ERASE to continue: '
+        read -r confirmation
+        if [[ "$confirmation" != "ERASE" ]]; then
+            die "Cancelled; nothing was changed on the device."
+        fi
+        step "Uninstalling the existing build"
+        adb uninstall "$PACKAGE" || warn "was not installed"
+        step "Installing the release APK"
+        adb install "$apk"
+    fi
     step "Launching $PACKAGE"
     adb shell am start -S -W -n "${PACKAGE}/${ACTIVITY}" | tr -d '\r' | sed "s/^/${dim}/;s/$/${off}/"
     exit 0
@@ -173,7 +184,18 @@ if $run_tests; then
 fi
 
 step "Building and installing debug APK"
-./gradlew :app:installDebug
+if ! ./gradlew :app:installDebug 2>&1 | tee /tmp/receipts-debug-install.log; then
+    if grep -q "INSTALL_FAILED_UPDATE_INCOMPATIBLE\|signatures do not match" /tmp/receipts-debug-install.log; then
+        warn ""
+        warn "A release-signed build of $PACKAGE is installed, and Android cannot replace it"
+        warn "with a debug build in place. To switch back to debug builds:"
+        warn "  1. Back up in the app:  Settings -> Back up to a file"
+        warn "  2. adb uninstall $PACKAGE"
+        warn "  3. ./deploy.sh"
+        warn "  4. Restore in the app:  Settings -> Restore from a file"
+    fi
+    die "Install failed."
+fi
 
 apk="app/build/outputs/apk/debug/app-debug.apk"
 [[ -f "$apk" ]] && printf '%s\n' "${dim}$(ls -lh "$apk" | awk '{print $5, $9}')${off}"
