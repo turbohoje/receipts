@@ -5,6 +5,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.PaddingValues
@@ -48,12 +49,15 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
+import cc.rocketscience.receipts.backup.SigningInfo
 import cc.rocketscience.receipts.backup.drive.DriveClient
 import cc.rocketscience.receipts.backup.drive.DriveFile
 import cc.rocketscience.receipts.ui.ConfirmDialog
@@ -70,6 +74,7 @@ fun SettingsScreen(
     val lastTarget by vm.lastBackupTarget.collectAsState()
 
     var confirmRestore by remember { mutableStateOf<(() -> Unit)?>(null) }
+    val clipboard = LocalClipboardManager.current
 
     // Path A: the system picker writes the file wherever the user chooses, Drive included.
     val createDocument = rememberLauncherForActivityResult(
@@ -198,6 +203,12 @@ fun SettingsScreen(
                 }
             }
 
+            val context = LocalContext.current
+            val version = remember(context) {
+                "RS Receipts ${SigningInfo.versionName(context)} " +
+                    "(build ${SigningInfo.versionCode(context)})"
+            }
+
             vm.status?.let { Notice(message = it, onDismiss = vm::clearMessages) }
             vm.problem?.let {
                 Notice(
@@ -207,6 +218,19 @@ fun SettingsScreen(
                     onDismiss = vm::clearMessages,
                 )
             }
+
+            // Version last and muted: needed when reporting a problem, noise the rest of the
+            // time. Tap to copy, so it can be pasted into a message without transcribing.
+            Text(
+                version,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { clipboard.setText(AnnotatedString(version)) }
+                    .padding(top = 8.dp, bottom = 4.dp),
+            )
         }
 
         if (vm.busy) {

@@ -340,6 +340,11 @@ consent model is designed to prevent. So the Console visit is unavoidable. What 
 do is remove every bit of guesswork from it, which is what the setup screen below does.
 
 **Setup lives in [`docs/google-drive-setup.md`](docs/google-drive-setup.md)**, not in the app.
+That file records the registered fingerprints for all three distributions and, in particular,
+which certificate a **Play-distributed** build must be registered with: the SHA-1 of the APK's
+**v3.0 signature block**, shown in Play Console as *App integrity → App signing key
+certificate*. It is not the fingerprint the app reports about itself, and not the upload key —
+both of those were tried first and neither works.
 There was briefly an in-app setup screen that displayed the running build's own package name
 and signing SHA-1 for pasting into the Console. It was removed: registering an OAuth client is
 a one-off developer task, and putting Cloud Console instructions in front of every user of the

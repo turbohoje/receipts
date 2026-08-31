@@ -53,59 +53,67 @@ Consequences worth remembering:
 release builds need **two clients in the same project**. They share the consent screen and the
 enabled API.
 
-| Build | Keystore | SHA-1 |
+| Distribution | Key | SHA-1 |
 | --- | --- | --- |
-| debug | `~/.android/debug.keystore` (alias `androiddebugkey`, password `android`) | `C9:55:EB:E2:2A:12:84:53:68:17:CC:D9:E8:EF:A8:4F:83:B3:C1:BC` |
-| release | `receipts-release.jks` (alias `receipts`, password in `keystore.properties`) | `6D:11:95:5F:96:2F:0A:23:16:9B:12:96:A0:2E:96:BE:37:E4:8C:11` |
+| sideloaded debug | `~/.android/debug.keystore` (alias `androiddebugkey`, password `android`) | `C9:55:EB:E2:2A:12:84:53:68:17:CC:D9:E8:EF:A8:4F:83:B3:C1:BC` |
+| sideloaded release | `receipts-release.jks` (alias `receipts`, password in `keystore.properties`) | `6D:11:95:5F:96:2F:0A:23:16:9B:12:96:A0:2E:96:BE:37:E4:8C:11` |
+| **installed from Play** | Google's app signing key — see below | `74:24:23:C3:F4:EE:ED:66:8C:58:EE:4F:8C:2F:37:5B:26:42:0F:4C` |
 
-SHA-256, if ever asked for:
+**All three are separate distributions of the same app and each needs its own OAuth client.**
+They coexist in one project and share the consent screen.
 
-- debug — `11:0C:A7:B9:BE:7A:10:5A:02:FD:47:9B:13:09:F5:B6:A1:35:A3:A2:7B:D1:4E:91:0C:AA:2B:AC:59:10:77:B8`
-- release — `B1:9E:F5:BF:F3:54:92:8E:2B:F4:90:5E:1C:B5:9A:A2:42:5E:DD:BA:07:9A:C3:C3:5D:8A:C1:29:51:7C:D1:F7`
+### Play App Signing, and the trap in it
 
-### Printing a fingerprint again
+Play **re-signs** every upload, so a Play-installed build is signed by Google, not by
+`receipts-release.jks`. The release keystore becomes only the *upload* key. Play Console's
+**App integrity** page shows both, and they are different certificates:
 
-```sh
-export JAVA_HOME=/opt/homebrew/opt/openjdk@21
+- **Upload key certificate** — `6D:11:95:…`, yours. **Not** what to register for Drive.
+- **App signing key certificate** — Google's. This is what the installed app runs as, and what
+  the OAuth client must match.
 
-# release
-"$JAVA_HOME/bin/keytool" -list -v -keystore receipts-release.jks -alias receipts \
-  -storepass "$(grep '^storePassword=' keystore.properties | cut -d= -f2)" | grep -E 'SHA1|SHA256'
+### Which certificate to register for a Play build
 
-# debug
-"$JAVA_HOME/bin/keytool" -list -v -keystore ~/.android/debug.keystore \
-  -alias androiddebugkey -storepass android | grep -E 'SHA1|SHA256'
+**Register the SHA-1 from the APK's v3.0 signature block.** Play Console shows the same value
+as **App integrity → App signing key certificate**. For this app that is:
 
-# or, whatever an already-built APK is actually signed with
-"$HOME/Library/Android/sdk/build-tools/37.0.0/apksigner" verify --print-certs \
-  app/build/outputs/apk/release/app-release.apk
+```
+74:24:23:C3:F4:EE:ED:66:8C:58:EE:4F:8C:2F:37:5B:26:42:0F:4C
 ```
 
-> **If `receipts-release.jks` or `keystore.properties` is lost**, the release fingerprint can
-> never be reproduced. A new keystore means a new SHA-1 (register it) and an app that can only
-> be installed by uninstalling the old one first, which erases its data. Back both files up
-> outside this repo.
+This is worth spelling out because three other fingerprints are visible in the same place and
+none of them work.
 
-## 3. Console steps, from scratch
+An APK distributed through Play on Android 17 is signed several times over:
 
-1. **Create a project** at <https://console.cloud.google.com>.
-2. **Enable the Google Drive API** —
-   <https://console.cloud.google.com/apis/library/drive.googleapis.com>.
-3. **Configure the OAuth consent screen**:
-   - App name, support email, developer contact.
-   - Add the privacy policy and terms URLs from the table above.
-   - Add `drive.file` as a scope. The Console sorts scopes into *non-sensitive / sensitive /
-     restricted* tables — check which one it lands in, because that decides whether going to
-     Production needs Google's review.
-   - **Do not upload an app logo unless you intend to go through brand verification** —
-     adding a logo triggers it. The icon is exported at `branding/` if it is ever wanted.
-4. **Publishing status**:
-   - **Testing** — you must add each user's Google address as a test user (cap 100). No review.
-     Imposes its own token-lifetime limits, so access may need periodic re-granting.
-   - **Production** — public, no test-user list. Review required only if the scope is
-     sensitive or restricted.
-5. **Create credentials → OAuth client ID → Android**, with the package name and the SHA-1 of
-   the build in question. Repeat for the second fingerprint.
+```
+V3.0 Signer             74:24:23:C3:F4:EE:ED:66:8C:58:EE:4F:8C:2F:37:5B:26:42:0F:4C  <- register this
+V3.2 Hybrid Classical   30:73:52:54:5F:E3:2D:C9:34:69:D5:72:28:3C:A6:45:48:52:9F:27
+V3.2 Hybrid PQC         16:28:EA:A6:2B:30:30:77:B3:0F:7A:80:31:79:88:C2:75:3A:43:19
+Source Stamp            B1:AF:3A:0B:F9:98:AE:ED:E1:A8:71:6A:53:9E:5A:59:DA:1D:86:D6
+```
+
+The v3.2 pair is Android 17's hybrid classical/post-quantum signing; the source stamp is Play's
+distribution marker. **Google's OAuth check matches the v3.0 certificate**, which is the
+classical lineage Play recorded at App Signing enrolment.
+
+> **The fingerprint the app reports is not the one to register, on a Play build.** On Android
+> 17 `PackageManager` returns the *post-quantum* certificate (`16:28:…`) as the app's identity,
+> so the in-app diagnostic shows that. Google matches the v3.0 certificate instead. The two
+> disagree, and the app cannot see the value it needs. For a sideloaded build there is only one
+> certificate and the diagnostic is authoritative; for a Play build, use App integrity.
+
+All three of `16:28:…`, `30:73:…` and `74:24:…` were registered in turn before the last one
+worked. Extra Android OAuth clients on the same package are harmless — only the matching one is
+ever used — so registering all the candidates at once is a reasonable shortcut.
+
+Listing every certificate in an installed APK:
+
+```sh
+adb shell pm path cc.rocketscience.receipts
+adb exec-out cat <that path> > onphone.apk
+"$HOME/Library/Android/sdk/build-tools/37.0.0/apksigner" verify --print-certs onphone.apk
+```
 
 ### Switching between debug and release builds
 
@@ -135,6 +143,7 @@ clipboard.
 | Symptom | Likely cause |
 | --- | --- |
 | `DEVELOPER_ERROR` (status 10) | **The usual one.** No OAuth client matches this build's package + SHA-1. Check the fingerprint under "More info" against the Console. |
+| `INTERNAL_ERROR` (status 8) with `UNREGISTERED_ON_API_CONSOLE` in the message | Same cause, different code — Google reports an unregistered app as a generic internal error. On a Play build it usually means the registered fingerprint is not the **v3.0** one. Do not trust the fingerprint the app prints; take it from App integrity. |
 | Sign-in fails immediately, before any account chooser | Same as above. |
 | Worked on debug, fails on release (or the reverse) | Only one fingerprint is registered. Both builds need their own client. |
 | `CANCELED` (status 16) | The consent screen was dismissed. Not an error. |

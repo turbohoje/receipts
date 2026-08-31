@@ -22,21 +22,40 @@ object SigningInfo {
 
     fun packageName(context: Context): String = context.packageName
 
+    /** The build number Play increments; distinct from the human-facing version name. */
+    fun versionCode(context: Context): Long = runCatching {
+        context.packageManager.getPackageInfo(context.packageName, 0).longVersionCode
+    }.getOrDefault(0L)
+
     /** True for a debug-signed build, which is registered under a different SHA-1. */
     fun isDebuggable(context: Context): Boolean =
         (context.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
 
-    /** Colon-separated uppercase SHA-1, the format the Cloud Console expects. */
-    fun signingSha1(context: Context): String? = digest(context, "SHA-1")
-
-    private fun digest(context: Context, algorithm: String): String? = runCatching {
+    /**
+     * Every SHA-1 this build is signed with, in APK order.
+     *
+     * Usually one, and that one is the app's identity as far as the platform and Google are
+     * concerned. A Play-signed APK's *file* may hold several certificates — on Android 17 a
+     * hybrid classical/post-quantum pair plus a v3.0 block — but do not go reading those and
+     * choosing between them: only what the platform reports here is matched against a
+     * registered OAuth client.
+     */
+    fun signingSha1s(context: Context): List<String> = runCatching {
         val info = context.packageManager.getPackageInfo(
             context.packageName,
             PackageManager.GET_SIGNING_CERTIFICATES,
         )
-        val certificate = info.signingInfo?.apkContentsSigners?.firstOrNull() ?: return null
-        MessageDigest.getInstance(algorithm)
-            .digest(certificate.toByteArray())
-            .joinToString(":") { "%02X".format(it) }
-    }.getOrNull()
+        val signers = info.signingInfo?.apkContentsSigners.orEmpty()
+        signers.map { certificate ->
+            MessageDigest.getInstance("SHA-1")
+                .digest(certificate.toByteArray())
+                .joinToString(":") { "%02X".format(it) }
+        }
+    }.getOrDefault(emptyList())
+
+    /** True when Play re-signed this build, so the fingerprint is Google's, not the developer's. */
+    fun installedFromPlay(context: Context): Boolean = runCatching {
+        context.packageManager.getInstallSourceInfo(context.packageName)
+            .installingPackageName == "com.android.vending"
+    }.getOrDefault(false)
 }
