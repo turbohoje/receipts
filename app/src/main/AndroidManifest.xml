@@ -6,8 +6,20 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <!-- Picking an existing image uses the system photo picker, which needs no permission. -->
 
-    <!-- Not required: a device without a camera can still import from the photo picker. -->
+    <!--
+      All optional: a device with no camera at all can still add receipts from the photo
+      picker, so nothing here should keep the app off a device.
+
+      android.hardware.camera must be listed explicitly. Requesting the CAMERA permission
+      makes Google Play imply that feature as REQUIRED, and it means a rear-facing camera
+      specifically — declaring only camera.any does not override it, because that is a
+      different feature name. Left implied, it silently excludes every device without a
+      back camera.
+    -->
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
     <uses-feature android:name="android.hardware.camera.any" android:required="false" />
+    <uses-feature android:name="android.hardware.camera.autofocus" android:required="false" />
+    <uses-feature android:name="android.hardware.camera.flash" android:required="false" />
 
     <application
         android:name=".ReceiptsApp"

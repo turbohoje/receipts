@@ -2,9 +2,12 @@
 <resources>
     <!--
       Platform theme only. Colors live in Compose (see ui/theme/Theme.kt); this exists so the
-      window before first frame matches the system's light/dark setting instead of flashing.
+      window before first frame matches the system rather than flashing.
+
+      DayNight needs API 29, so this base stays light and values-v29 overrides it. Only the
+      pre-first-frame window is affected either way.
     -->
-    <style name="Theme.Receipts" parent="@android:style/Theme.DeviceDefault.DayNight">
+    <style name="Theme.Receipts" parent="@android:style/Theme.DeviceDefault.Light.NoActionBar">
         <item name="android:windowActionBar">false</item>
         <item name="android:windowNoTitle">true</item>
     </style>

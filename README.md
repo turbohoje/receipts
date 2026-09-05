@@ -3,6 +3,12 @@
 An offline-first Android app for capturing receipts with the phone camera, grouping them into
 expense reports, and exporting/backing up those reports. Ships as a standard signed APK.
 
+## Working on this code
+
+[`CLAUDE.md`](CLAUDE.md) carries the build commands, the device-testing rules, and the traps
+this codebase has already fallen into — read it before changing `minSdk`, the manifest, or
+anything gesture-related.
+
 ## Overview
 
 The core loop is: **create a report → snap receipts into it → export or back it up.**
@@ -40,7 +46,13 @@ Everything works with no network connection. Drive is the only online feature.
 | Background work | none — see the note under [Backup & Restore](#backup--restore) |
 | Build | Gradle (Kotlin DSL) with wrapper |
 
-`minSdk 33` (Android 13) · `targetSdk 37` · `compileSdk 37` · JDK 21 toolchain.
+`minSdk 26` (Android 8.0) · `targetSdk 37` · `compileSdk 37` · JDK 21 toolchain.
+
+The floor was 33 until testers could not install. 33 had been chosen to avoid a
+`POST_NOTIFICATIONS` branch that no longer exists, and lint confirms nothing in the app needs
+anything above 26. Dynamic colour is the one feature that genuinely requires a newer platform
+(Android 12), so below that the app falls back to its own palette; devices on 12 and above are
+unaffected.
 
 ### Pinned versions
 
@@ -368,7 +380,7 @@ one registered. "Copy details" copies the block. See
 
 | Permission | Why |
 | --- | --- |
-| `CAMERA` | capturing receipts |
+| `CAMERA` | capturing receipts. All camera `uses-feature` entries are declared **optional** — requesting this permission otherwise makes Play imply a *required* rear-facing camera, which hides the app from devices that have none. Receipts can always be added from the photo picker instead. |
 | `INTERNET` | Drive backup only |
 
 `POST_NOTIFICATIONS` is **not** requested: there is no background worker to notify from (see
