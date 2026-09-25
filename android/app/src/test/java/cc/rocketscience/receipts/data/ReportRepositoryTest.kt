@@ -167,6 +167,16 @@ private class FakeDb {
             // ON DELETE CASCADE
             receipts.values.filter { it.reportId == reportId }.forEach { receipts.remove(it.id) }
         }
+
+        // ----- backup / restore -----
+        override suspend fun all(): List<Report> = reports.values.sortedBy { it.createdAt }
+        override suspend fun deleteAll() {
+            reports.clear()
+            receipts.clear() // ON DELETE CASCADE
+        }
+        override suspend fun insertAll(reports: List<Report>) {
+            reports.forEach { this@FakeDb.reports[it.id] = it }
+        }
     }
 
     val receiptDao = object : ReceiptDao {
@@ -178,6 +188,13 @@ private class FakeDb {
         override suspend fun allImageFiles(): List<String> = receipts.values.mapNotNull { it.imageFile }
         override suspend fun upsert(receipt: Receipt) { receipts[receipt.id] = receipt }
         override suspend fun deleteById(receiptId: String) { receipts.remove(receiptId) }
+
+        // ----- backup / restore -----
+        override suspend fun all(): List<Receipt> =
+            receipts.values.sortedWith(compareBy({ it.date }, { it.createdAt }))
+        override suspend fun insertAll(receipts: List<Receipt>) {
+            receipts.forEach { this@FakeDb.receipts[it.id] = it }
+        }
     }
 
     fun attachImage(receiptId: String, fileName: String) {
