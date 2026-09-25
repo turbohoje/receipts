@@ -1,0 +1,12 @@
+<en-US>
+First public release.
+
+Snap a receipt, crop it, add an amount. RS Receipts groups receipts into expense reports that total themselves.
+
+• Export a report as a PDF — summary table plus every receipt image
+• Or as a ZIP of images and a CSV
+• Back up to Google Drive, or to a file you choose, and restore onto a new phone
+• Works fully offline
+
+No account, no sign-up, no ads, no tracking. Your receipts stay on your phone.
+</en-US>

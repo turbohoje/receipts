@@ -9,6 +9,20 @@ expense reports, and exporting/backing up those reports. Ships as a standard sig
 this codebase has already fallen into — read it before changing `minSdk`, the manifest, or
 anything gesture-related.
 
+### Repository layout
+
+One folder per platform, each self-contained:
+
+```
+android/    the Gradle project: app/, gradlew, deploy.sh, device-data.sh, signing config
+ios/        the iOS app (not started)
+branding/   icon and store assets, shared across platforms
+docs/       setup notes that are not platform build steps
+```
+
+**Every command in the Android sections below runs from `android/`**, not the repo root — the
+Gradle root, the wrapper and both device scripts live there.
+
 ## Overview
 
 The core loop is: **create a report → snap receipts into it → export or back it up.**
@@ -484,7 +498,7 @@ uninstalling first, which erases its data.
 Signed with **v3 only**: v1 is irrelevant above `minSdk 24`, and every device at `minSdk 33`
 supports v3, which additionally allows key rotation later.
 
-Release APK lands at `app/build/outputs/apk/release/app-release.apk` — currently **3.9 MB**,
+Release APK lands at `android/app/build/outputs/apk/release/app-release.apk` — currently **3.9 MB**,
 against 44.6 MB for the debug build.
 
 ### Verified properties of the release APK
@@ -503,7 +517,7 @@ Checked with `apksigner` and `aapt2 dump badging`:
 **On permissions:** the first signed build also declared `ACCESS_NETWORK_STATE`, which nothing
 in this app needs. It came from `camera-view` → `camera-video` → `androidx.media3`, and since
 only `PreviewView` is used and never video capture, `camera-video` is now excluded in
-`app/build.gradle.kts`. That drops the permission and the media3 code with it. The only other
+`android/app/build.gradle.kts`. That drops the permission and the media3 code with it. The only other
 entry, `…DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION`, is a signature-level self-permission added
 by `androidx.core`; it is never shown to the user and cannot be removed.
 

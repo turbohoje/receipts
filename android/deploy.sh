@@ -19,6 +19,9 @@
 
 set -euo pipefail
 
+# Resolve this script's own path before cd, so --help can still read its header comment
+# when the script is invoked by path from another directory.
+SELF="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/$(basename "${BASH_SOURCE[0]}")"
 cd "$(dirname "${BASH_SOURCE[0]}")"
 
 PACKAGE="cc.rocketscience.receipts"
@@ -42,7 +45,7 @@ while [[ $# -gt 0 ]]; do
         --install)   do_install_release=true ;;
         --uninstall) do_uninstall=true ;;
         # Print the header comment block, stopping at the first non-comment line.
-        -h|--help)   awk 'NR>1 { if ($0 !~ /^#/) exit; sub(/^# ?/, ""); print }' "$0"; exit 0 ;;
+        -h|--help)   awk 'NR>1 { if ($0 !~ /^#/) exit; sub(/^# ?/, ""); print }' "$SELF"; exit 0 ;;
         *)           echo "unknown option: $1  (try --help)" >&2; exit 2 ;;
     esac
     shift

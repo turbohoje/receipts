@@ -11,6 +11,9 @@
 # or write a release build's data.
 
 set -euo pipefail
+# Resolve this script's own path before cd, so --help can still read its header comment
+# when the script is invoked by path from another directory.
+SELF="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/$(basename "${BASH_SOURCE[0]}")"
 cd "$(dirname "${BASH_SOURCE[0]}")"
 
 PACKAGE="cc.rocketscience.receipts"
@@ -191,5 +194,5 @@ case "${1:-}" in
     backup)  shift; do_backup "${1:-}" ;;
     restore) shift; do_restore "${1:-}" ;;
     verify)  shift; do_verify "${1:-}" ;;
-    *) awk 'NR>1 { if ($0 !~ /^#/) exit; sub(/^# ?/, ""); print }' "$0"; exit 2 ;;
+    *) awk 'NR>1 { if ($0 !~ /^#/) exit; sub(/^# ?/, ""); print }' "$SELF"; exit 2 ;;
 esac

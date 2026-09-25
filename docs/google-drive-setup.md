@@ -121,7 +121,7 @@ The two are signed with different keys, so **Android cannot upgrade one to the o
 place** — the installed app must be uninstalled first, which erases its data. Two consequences:
 
 - Whichever build you run needs *its own* OAuth client, or Drive will fail on it.
-- `./deploy.sh --release --install` upgrades in place when a release build is already
+- `android/deploy.sh --release --install` upgrades in place when a release build is already
   installed (data preserved) and only demands a typed `ERASE` when the signatures genuinely
   differ. Back up first either way: **Settings → Back up to a file**.
 
@@ -169,4 +169,4 @@ delete those from the `RS Receipts Backups` folder.
 
 Calls go straight to Drive REST v3 over `HttpURLConnection` — deliberately not
 `google-api-client`, which would drag its own HTTP stack and Guava in to wrap five endpoints.
-See `app/src/main/java/cc/rocketscience/receipts/backup/drive/`.
+See `android/app/src/main/java/cc/rocketscience/receipts/backup/drive/`.

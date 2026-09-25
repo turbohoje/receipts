@@ -15,7 +15,7 @@ build/
 *.class
 *.jar
 # ...but the Gradle wrapper jar MUST be committed, or ./gradlew cannot bootstrap.
-!gradle/wrapper/gradle-wrapper.jar
+!**/gradle/wrapper/gradle-wrapper.jar
 
 # ---------- Machine-specific ----------
 # SDK path differs per machine; local.properties.example is the committed template.
@@ -38,7 +38,7 @@ lint-results*.html
 lint-results*.xml
 lint-results*.txt
 *.log
-/captures/
+captures/
 .navigation/
 
 # ---------- IDE ----------
