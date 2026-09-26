@@ -1,6 +1,7 @@
 package cc.rocketscience.receipts.export
 
 import cc.rocketscience.receipts.money.Money
+import cc.rocketscience.receipts.zip.putStoredEntry
 import java.io.OutputStream
 import java.time.Instant
 import java.time.ZoneId
@@ -31,9 +32,7 @@ class ZipExporter(private val zone: ZoneId = ZoneId.systemDefault()) {
             for (row in rows) {
                 val image = row.image ?: continue
                 if (!image.isFile) continue
-                zip.putNextEntry(ZipEntry(imageEntryName(row)))
-                image.inputStream().use { it.copyTo(zip) }
-                zip.closeEntry()
+                zip.putStoredEntry(imageEntryName(row), image.readBytes())
             }
         }
     }

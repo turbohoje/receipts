@@ -1,5 +1,6 @@
 package cc.rocketscience.receipts.backup
 
+import cc.rocketscience.receipts.zip.putStoredEntry
 import kotlinx.serialization.json.Json
 import java.io.File
 import java.io.OutputStream
@@ -34,9 +35,7 @@ class BackupWriter(private val json: Json = BackupJson) {
                     missing++
                     continue
                 }
-                zip.putNextEntry(ZipEntry(BackupFormat.imageEntry(name)))
-                file.inputStream().use { it.copyTo(zip) }
-                zip.closeEntry()
+                zip.putStoredEntry(BackupFormat.imageEntry(name), file.readBytes())
                 written++
             }
         }

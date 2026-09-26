@@ -80,6 +80,14 @@ android {
 
     testOptions {
         unitTests.isIncludeAndroidResources = true
+        // Tests run in a forked JVM, so a -D on the Gradle command line does not reach them.
+        // Forwarded for ArchiveInteropTest's fixture regeneration; see fixtures/interop/README.md.
+        unitTests.all {
+            it.systemProperty(
+                "rsreceipts.writeFixture",
+                System.getProperty("rsreceipts.writeFixture") ?: "",
+            )
+        }
     }
 }
 

@@ -15,10 +15,16 @@ One folder per platform, each self-contained:
 
 ```
 android/    the Gradle project: app/, gradlew, deploy.sh, device-data.sh, signing config
-ios/        the iOS app (not started)
+ios/        RSReceiptsCore (shared logic, builds and passes today) plus the app target,
+            which waits on Xcode — see ios/README.md
 branding/   icon and store assets, shared across platforms
 docs/       setup notes that are not platform build steps
+fixtures/   cross-platform test fixtures: one backup archive written by each platform
 ```
+
+The two platforms share a file format, not code. What keeps them honest is
+[`fixtures/interop/`](fixtures/interop): each platform's test suite reads the archive the other
+one wrote.
 
 **Every command in the Android sections below runs from `android/`**, not the repo root — the
 Gradle root, the wrapper and both device scripts live there.
