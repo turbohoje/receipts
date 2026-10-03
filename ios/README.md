@@ -38,21 +38,47 @@ cd ios
 ### Running on real hardware
 
 `--hardware` finds the connected device, builds signed, installs with `devicectl` and launches.
-It needs three things a simulator does not, and none of them can be done from the command line:
+**Verified end to end** on an iPad mini 6 (iPad14,1) running iOS 27.0.
 
-1. **The device on iOS 27 or newer**, matching the deployment target. An iPad mini 6 on iOS 26.6
-   will refuse the install no matter what else is right.
+```sh
+DEVELOPMENT_TEAM=R23W8J48BW ./run.sh --hardware --demo
+```
+
+Prerequisites, none of which the script can do for you:
+
+1. **The device on iOS 27 or newer**, matching the deployment target. An iPad on 26.x refuses
+   the install no matter what else is right — and note that a 26.x device offered "26.7" is
+   being offered a point release, not the jump to 27.
 2. **Developer Mode on** — Settings → Privacy & Security → Developer Mode. The device reboots.
-3. **An Apple ID in Xcode → Settings → Accounts.** A free one is enough: it yields a Personal
-   Team and a 7-day provisioning profile, which has to be refreshed by rebuilding. The build
-   passes `-allowProvisioningUpdates`, so Xcode mints the certificate and profile itself. Pass
-   `DEVELOPMENT_TEAM=XXXXXXXXXX` if the account belongs to more than one team.
+   It survives OS updates, so this is once per device.
+3. **An Apple ID in Xcode → Settings → Accounts**, and `DEVELOPMENT_TEAM` set to the team id.
+   `xcodebuild` will not guess a team the way the Xcode UI does.
 
-Signing is scoped so this costs the simulator nothing: `CODE_SIGNING_ALLOWED[sdk=iphonesimulator*]`
-is `NO`, so simulator builds still need no account at all, while device builds sign normally.
+Signing is scoped so none of this costs the simulator anything:
+`CODE_SIGNING_ALLOWED[sdk=iphonesimulator*]` is `NO`, so simulator builds still need no account.
 
-**The hardware path is written but unverified** — it has been run as far as the signing error,
-which it reports with the fix, but no build has yet reached a device.
+### Four things that each looked like a dead end
+
+Worth recording, because every one of them reports as a different problem than it is.
+
+- **A valid certificate that cannot sign.** `security find-identity -v -p codesigning` said
+  *0 valid identities* while the certificate and its private key were both present and
+  unexpired. Dropping `-v` showed *1 identity found* — the pair existed, it just would not
+  validate. The cause was the **WWDR intermediate**: the keychain held only the G1 one, expired
+  February 2023, while the certificate is issued by **G3**. Install the current intermediate
+  from <https://www.apple.com/certificateauthority/> (`AppleWWDRCAG3.cer`) and the identity goes
+  valid immediately. The `-v`/no-`-v` difference is the diagnostic.
+- **The team id is in the certificate.** No need to hunt in Xcode's Accounts pane:
+  `security find-certificate -c "Apple Development" -p | openssl x509 -noout -subject` prints
+  `OU=<team id>`.
+- **`generic/platform=iOS` cannot register a device.** With a generic destination the build
+  fails with *"your team has no devices from which to generate a provisioning profile"*.
+  Building for `-destination "id=$udid"` plus **`-allowProvisioningDeviceRegistration`** lets
+  xcodebuild add the device to the portal itself, which is what turns a first-time device into
+  a working one without visiting developer.apple.com.
+- **`devicectl` eats leading-dash app arguments.** `… process launch <bundle> -seedDemoData`
+  fails with *"Missing value for '-t <seconds>'"*, because the argument parser reads it as a
+  cluster of short options. It needs `-- -seedDemoData`.
 
 A run without `--shot` opens the simulator window and brings it to the front; `--shot` stays
 headless on purpose, so screenshot runs don't steal focus. Note that **Xcode 27 removed
@@ -209,6 +235,8 @@ retrofit, and none of them is contradicted by what exists today.
 
 Working, and verified on both an iPhone 18 Pro and an iPad Pro 13-inch simulator:
 
+- **Receipt photos** — camera capture, photo-library picking, a crop overlay, and storage
+  under `Documents/images/`. See "The image pipeline" below.
 - **Reports list** — name, total, receipt count and date range per row; create and delete, with
   a confirmation that names what is going away.
 - **Report detail** — receipts ordered by date then insertion order, per-receipt amounts and a
@@ -224,17 +252,87 @@ Working, and verified on both an iPhone 18 Pro and an iPad Pro 13-inch simulator
 Totals, amount formatting and parsing all run through `RSReceiptsCore`, so they are the same
 code the interop checks cover.
 
+- **Backup, restore and ZIP export** — Settings → Back up to a file / Restore from a file, and
+  Export ZIP on a report. See "Export destinations" below.
+
 Not built yet, in the order they make sense:
 
-1. The image pipeline — capture (AVFoundation), photo picking (`PhotosPicker`), the crop
-   overlay, and the image store with its orphan sweep. **Camera cannot be tested in a
-   simulator**; the photo picker can.
-2. PDF export (PDFKit) and ZIP export — the ZIP half is already built and checked in the core.
-3. Backup and restore UI on top of the core's `BackupWriter`/`BackupReader`, via
-   `fileExporter`/`fileImporter`. This is Path A, and needs no registration.
-4. The remaining pure logic still to port, all already covered by Android tests: crop overlay
-   geometry (11 tests), PDF layout (6), image store naming and the orphan sweep (6).
-5. Drive Path B — see below.
+1. **PDF export.** The layout is the last pure logic still to port (6 Android tests), then
+   PDFKit to draw it.
+2. **Drive Path B** — see below. Path A, which is what ships today, needs no registration.
+
+## Export destinations
+
+Everything goes through the system document picker (`fileExporter`), which is the same trade
+Android's Path A makes with `ACTION_CREATE_DOCUMENT`: the app writes a file and the system
+decides where it lands. That one control reaches **Google Drive** and any other Files provider
+the user has installed, **iCloud Drive**, a folder **on the device itself**, and anywhere
+shared with a Mac. The app holds no account and talks to no service, so there is nothing to
+register and nothing that can leak.
+
+| What | Where | Name |
+| --- | --- | --- |
+| Whole-database backup | Settings → Back up to a file | `rs-receipts-backup-<yyyyMMdd-HHmmss>.zip` |
+| One report's CSV + images | Report → Export ZIP | `<report-slug>-<yyyyMMdd>.zip` |
+
+Restore reads the manifest and refuses a bad or too-new file **before touching the database**,
+then confirms with what the backup actually holds, because it replaces everything — there is no
+merge, on either platform.
+
+### Verified, not assumed
+
+The app was made to write a backup through its real code path, and the resulting file was
+checked three ways:
+
+- `zipfile.testzip()` — every entry's CRC passes.
+- The manifest parses: `schemaVersion` 1, 3 reports, 10 receipts, totalling 112,734 minor units
+  (`$1,127.34`, matching the UI), no receipt pointing at a missing report, and `imageFile`
+  present on every receipt including the nulls.
+- **`java.util.zip` reads it** — the Android reader streams local headers rather than using the
+  central directory, so this is a genuinely different code path from the first two, and the one
+  that would reject a malformed archive.
+
+## The image pipeline
+
+Mirrors Android's, and takes the same shape: one path for both sources, so that downstream —
+crop, storage, exports, backup — a camera photo and a library photo are indistinguishable.
+
+| Piece | Where |
+| --- | --- |
+| Crop maths (`CropGeometry`, `NormalizedRect`) | core, **11 checks** ported from `CropOverlayTest` |
+| `ImageStore` — naming, delete, orphan sweep | core, **4 checks** |
+| `ImageSizing` — 2048 long edge, quality 0.85, crop-to-pixels | core, **4 checks** |
+| `ImagePipeline` — decode, crop, encode | app (needs UIKit) |
+| `CameraCaptureScreen` — AVFoundation preview and shutter | app |
+| `CropScreen` — the overlay | app |
+| `AddImageFlow` — source chooser, then crop, then store | app |
+
+Decisions worth knowing:
+
+- **Rotation is baked into the pixels and the EXIF tag dropped.** Camera and library images
+  routinely arrive rotated, and any consumer that ignores the tag — a PDF renderer, say — would
+  show the receipt on its side. `CGImageSourceCreateThumbnailAtIndex` with
+  `kCGImageSourceCreateThumbnailWithTransform` does the rotation and the downsample in one
+  pass, so a 12-megapixel photo is never fully decoded just to be shrunk. That subsumes
+  Android's manual `sampleSizeFor`, which is why the core has no equivalent.
+- **Images are named by their own id, not the receipt's** — same as Android. "Replace photo"
+  writes the new file and deletes the old one only after the swap is committed, so a failed
+  write cannot lose the only copy.
+- **Cancel deletes only what this edit wrote.** The receipt's existing image is never touched
+  by an abandoned edit.
+- **Delete removes the row first, then the file.** The reverse order would delete an image
+  still owned by a live row if the process died in between; the startup sweep covers the gap.
+- **No tap gesture anywhere near the crop overlay**, per the Android note that a pinch is
+  reported as a click often enough to matter.
+- **The crop gesture reads the rectangle from state on every change** rather than capturing it.
+  That is the SwiftUI form of the stale-rectangle bug the Android version shipped with.
+
+### What is and isn't verified
+
+The maths and the storage are covered by the core checks. The interactive flow is not: the
+**camera cannot run in a simulator at all**, and nothing here can drive taps on a physical
+device, so capture → crop → save has been built and installed but not exercised end to end.
+The photo-library path does work in a simulator if you want to try it by hand.
 
 Bundle identifier is `cc.rocketscience.receipts`, matching the Android `applicationId`.
 

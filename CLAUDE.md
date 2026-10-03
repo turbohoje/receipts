@@ -118,11 +118,36 @@ cd ios/RSReceiptsCore && swift run RSReceiptsCoreChecks   # 63 checks
   it. Same rule as Android: invented data only, never real receipts.
 - **Real hardware needs three things the simulator does not**, none of them scriptable: the
   device on iOS 27+ (the deployment target), Developer Mode on, and an Apple ID in Xcode →
-  Settings → Accounts. Signing is scoped with `CODE_SIGNING_ALLOWED[sdk=iphonesimulator*] = NO`
-  so simulator builds still need no account. The hardware path is written but has never reached
-  a device.
+  Settings → Accounts, with `DEVELOPMENT_TEAM` passed (xcodebuild will not guess one). Signing
+  is scoped with `CODE_SIGNING_ALLOWED[sdk=iphonesimulator*] = NO` so simulator builds still
+  need no account. Verified on an iPad mini 6:
+  `DEVELOPMENT_TEAM=R23W8J48BW ./run.sh --hardware`.
+- **A valid certificate that cannot sign** means the WWDR intermediate, not the certificate.
+  `security find-identity -v -p codesigning` reporting 0 while the same command without `-v`
+  reports 1 is the signature: the cert and key are fine, the chain is not. The keychain had
+  only the G1 intermediate, expired Feb 2023, against a G3-issued cert; installing
+  `AppleWWDRCAG3.cer` from <https://www.apple.com/certificateauthority/> fixed it. The team id
+  is the cert's `OU` field, not something to hunt for in Xcode.
+- **Device builds need `-destination "id=$udid"` plus `-allowProvisioningDeviceRegistration`.**
+  With `generic/platform=iOS` there is no device to register and signing fails with "your team
+  has no devices". `devicectl` also parses a leading-dash app argument as its own options, so
+  launch arguments need `-- -seedDemoData`.
 - **Xcode 27 removed `Simulator.app`**, replacing it with `DeviceHub.app`, so `open -a Simulator`
   fails outright. `run.sh` opens the UI by full path.
+- **Image rules match Android exactly**: 2048 long edge, JPEG 0.85, files named by their own
+  UUID (lowercase — the names travel to Android inside backups), replace writes the new file
+  before deleting the old, delete removes the row before the file, and a startup sweep clears
+  orphans. The crop maths lives in `CropGeometry` in the core with the 11 Android tests ported;
+  the view does no maths and reads the rectangle from state on every drag, which is the SwiftUI
+  form of the stale-rectangle bug `CropScreen` shipped with.
+- **The camera cannot be tested in a simulator**, and nothing can drive taps on a physical
+  device, so the capture flow is built and installed but unexercised.
+- **Export goes through `fileExporter`**, never a service SDK — that is what reaches Google
+  Drive, iCloud Drive and local folders at once, and is the same trade Android's Path A makes.
+  Backup and report-ZIP export both use it; PDF export is not built yet.
+- To verify UI that needs a tap, add a throwaway `-TEMP…` launch flag, screenshot or dump the
+  artefact, then remove it and rebuild. The iOS backup path was confirmed this way: the app
+  wrote a real archive, which `zipfile` and then `java.util.zip` both read.
 
 See `ios/README.md`.
 
