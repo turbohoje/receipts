@@ -165,6 +165,13 @@ Deliberately **not** in v1: categories, merchant/vendor as a separate field, tax
 report status/lifecycle, multi-currency, tags, multiple images per receipt. Receipts are ordered
 by `date` then `createdAt`.
 
+**Reports are ordered by hand.** `Report.sortOrder` is ascending, smallest at the top, with
+`createdAt` descending as the tie-break — so a store where nothing has been dragged looks
+exactly as it did when the list was simply newest-first. A new report takes `min - 1` and lands
+at the top; dropping a row renumbers the whole list from zero. Both apps expose this as an
+explicit reorder mode rather than a long press, which on Android is already taken by the
+rename/delete menu.
+
 ### Currency
 
 One currency for the whole app. Defaults to the device locale's currency on first launch,

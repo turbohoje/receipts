@@ -83,11 +83,34 @@ archive written by each platform, and each suite reads the other's.
   which is also why stored entries get complete local headers.
 - Entry names are UTF-8 with bit 11 set. They are *not* all ASCII: `slugify` keeps non-ASCII
   letters on purpose, so an export can contain `images/01-café-trip.jpg`.
-- `schemaVersion` is 1 on both platforms and restore refuses anything newer, so a bump locks the
-  other platform out until it catches up. Bump both at once and regenerate both fixtures.
+- `schemaVersion` is **2** on both platforms and restore refuses anything *newer*, so a bump
+  locks the other platform out until it catches up. Bump both at once and regenerate both v2
+  fixtures; leave the v1 pair alone, since their value is being artefacts of the old format.
+  Version 2 added `sortOrder` to each report. An older backup still restores — the field is
+  absent and defaults to 0.
 
 Regenerating fixtures (only when the format changes) is documented in
 `fixtures/interop/README.md`.
+
+## Report ordering
+
+Reports are manually orderable on both platforms, via an explicit reorder mode rather than a
+long press (Android's long press already opens the rename/delete menu).
+
+- `sortOrder` ascending, smallest at the top, with `createdAt DESC` as the tie-break. Every row
+  migrated from schema 1 holds **0**, so a database of zeroes sorts exactly as it did before
+  the feature existed and nothing moves until something is dragged.
+- A new report takes `min - 1`, so it lands at the top. A drop renumbers the **whole** list from
+  zero rather than nudging one row, which is what stops ties and exhausted gaps.
+- The rules live in `ReportOrder` on both sides — Kotlin `reorder/ReportOrder.kt` and Swift
+  `Model/ReportOrder.swift` — with the same cases tested on each.
+- **Room is at version 2.** `MIGRATION_1_2` adds the column. There is no destructive fallback
+  and the phone holds real receipts, so a missing or wrong migration is a crash on launch, not
+  a reset. The entity declares `@ColumnInfo(defaultValue = "0")` and that is load-bearing:
+  SQLite cannot `ADD COLUMN ... NOT NULL` without a default, and Room compares the live schema
+  against the entity on launch — a Kotlin-only default leaves the two out of step and throws.
+  Verified by replaying `1.json` → migration → `2.json` against real SQLite.
+
 
 ## The iOS side
 

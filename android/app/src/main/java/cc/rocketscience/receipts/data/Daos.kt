@@ -21,7 +21,7 @@ interface ReportDao {
         FROM reports r
         LEFT JOIN receipts rc ON rc.reportId = r.id
         GROUP BY r.id
-        ORDER BY r.createdAt DESC
+        ORDER BY r.sortOrder ASC, r.createdAt DESC
         """
     )
     fun observeSummaries(): Flow<List<ReportSummary>>
@@ -57,8 +57,15 @@ interface ReportDao {
 
     // ----- backup / restore -----
 
-    @Query("SELECT * FROM reports ORDER BY createdAt")
+    @Query("SELECT * FROM reports ORDER BY sortOrder ASC, createdAt DESC")
     suspend fun all(): List<Report>
+
+    /** The topmost position in use, or null when there are no reports yet. */
+    @Query("SELECT MIN(sortOrder) FROM reports")
+    suspend fun minSortOrder(): Long?
+
+    @Query("UPDATE reports SET sortOrder = :sortOrder WHERE id = :reportId")
+    suspend fun setSortOrder(reportId: String, sortOrder: Long)
 
     /** Cascades to receipts. Used only by restore, which replaces everything. */
     @Query("DELETE FROM reports")

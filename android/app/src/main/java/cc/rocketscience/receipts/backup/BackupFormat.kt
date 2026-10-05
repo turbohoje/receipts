@@ -15,8 +15,13 @@ object BackupFormat {
     /**
      * Bump only for changes a reader cannot infer. Restore refuses anything newer than this,
      * rather than importing half of it and leaving the database in a state nobody designed.
+     *
+     * 2 added `sortOrder` to each report, for the manual ordering of the reports list. A
+     * version-1 backup still restores — the field is absent and falls back to `createdAt`
+     * ordering — but a version-2 backup is refused by any build still on 1, which is why both
+     * platforms bumped in the same change and both interop fixtures were regenerated together.
      */
-    const val SCHEMA_VERSION = 1
+    const val SCHEMA_VERSION = 2
 
     const val MANIFEST_ENTRY = "manifest.json"
     const val IMAGE_PREFIX = "images/"
@@ -40,6 +45,12 @@ data class BackupReport(
     val name: String,
     val createdAt: Long,
     val updatedAt: Long,
+    /**
+     * Position in the manually ordered reports list, ascending. Defaulted so a version-1
+     * backup — which has no such field — still decodes, and then sorts by `createdAt` as it
+     * always did.
+     */
+    val sortOrder: Long = 0,
 )
 
 @Serializable

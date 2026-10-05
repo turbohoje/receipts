@@ -49,7 +49,7 @@ class BackupManager(
             createdAt = now(),
             currency = currency().currencyCode,
             reports = reports.map {
-                BackupReport(it.id, it.name, it.createdAt, it.updatedAt)
+                BackupReport(it.id, it.name, it.createdAt, it.updatedAt, it.sortOrder)
             },
             receipts = receipts.map {
                 BackupReceipt(
@@ -94,7 +94,7 @@ class BackupManager(
                     database.reportDao().deleteAll() // cascades to receipts
                     database.reportDao().insertAll(
                         manifest.reports.map {
-                            Report(it.id, it.name, it.createdAt, it.updatedAt)
+                            Report(it.id, it.name, it.createdAt, it.updatedAt, it.sortOrder)
                         }
                     )
                     database.receiptDao().insertAll(

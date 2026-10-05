@@ -26,6 +26,11 @@ class ReportsListViewModel(
         repository.renameReport(id, name)
     }
 
+    /** Persists a manual ordering, top to bottom. */
+    fun reorderReports(orderedIds: List<String>) = viewModelScope.launch {
+        repository.reorderReports(orderedIds)
+    }
+
     fun deleteReport(id: String) = viewModelScope.launch {
         repository.deleteReport(id)
     }

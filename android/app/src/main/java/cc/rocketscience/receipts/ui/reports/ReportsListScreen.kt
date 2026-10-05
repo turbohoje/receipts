@@ -17,8 +17,14 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.layout.height
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Card
 import androidx.compose.material3.DropdownMenu
@@ -52,6 +58,12 @@ import cc.rocketscience.receipts.ui.ConfirmDialog
 import cc.rocketscience.receipts.ui.TextPromptDialog
 import cc.rocketscience.receipts.ui.formatDateRange
 
+/**
+ * Row height while reordering. Fixed, and shared by the card and the drag maths, because the
+ * drop target is computed as a multiple of it.
+ */
+private val REORDER_ROW_HEIGHT = 88.dp
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ReportsListScreen(
@@ -63,6 +75,7 @@ fun ReportsListScreen(
     val reports by vm.reports.collectAsState()
 
     var showCreate by remember { mutableStateOf(false) }
+    var reordering by remember { mutableStateOf(false) }
     var renaming by remember { mutableStateOf<ReportSummary?>(null) }
     var deleting by remember { mutableStateOf<ReportSummary?>(null) }
 
@@ -84,6 +97,15 @@ fun ReportsListScreen(
                     }
                 },
                 actions = {
+                    if (reports.size > 1) {
+                        IconButton(onClick = { reordering = !reordering }) {
+                            if (reordering) {
+                                Icon(Icons.Filled.Check, contentDescription = "Done reordering")
+                            } else {
+                                Icon(Icons.Filled.Edit, contentDescription = "Reorder reports")
+                            }
+                        }
+                    }
                     IconButton(onClick = onOpenSettings) {
                         Icon(Icons.Filled.Settings, contentDescription = "Settings")
                     }
@@ -91,27 +113,60 @@ fun ReportsListScreen(
             )
         },
         floatingActionButton = {
-            FloatingActionButton(onClick = { showCreate = true }) {
-                Icon(Icons.Filled.Add, contentDescription = "New report")
+            if (!reordering) {
+                FloatingActionButton(onClick = { showCreate = true }) {
+                    Icon(Icons.Filled.Add, contentDescription = "New report")
+                }
             }
         },
     ) { padding ->
         if (reports.isEmpty()) {
             EmptyReports(Modifier.fillMaxSize().padding(padding))
         } else {
-            LazyColumn(
-                modifier = Modifier.fillMaxSize().padding(padding),
-                contentPadding = PaddingValues(16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                items(reports, key = { it.id }) { report ->
-                    ReportCard(
-                        report = report,
-                        currencyText = Money.format(report.totalMinor, vm.currency),
-                        onClick = { onOpenReport(report.id) },
-                        onRename = { renaming = report },
-                        onDelete = { deleting = report },
-                    )
+            if (reordering) {
+                // A plain scrolling column while rearranging: every row is the same height, so
+                // the drop target is arithmetic rather than a lazy-layout measurement.
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(padding)
+                        .verticalScroll(rememberScrollState())
+                        .padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    ReorderableColumn(
+                        items = reports,
+                        keyOf = { it.id },
+                        rowHeight = REORDER_ROW_HEIGHT,
+                        onReordered = vm::reorderReports,
+                    ) { report, isDragging, handle ->
+                        ReportCard(
+                            report = report,
+                            currencyText = Money.format(report.totalMinor, vm.currency),
+                            onClick = {},
+                            onRename = { renaming = report },
+                            onDelete = { deleting = report },
+                            reordering = true,
+                            isDragging = isDragging,
+                            dragHandle = handle,
+                        )
+                    }
+                }
+            } else {
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize().padding(padding),
+                    contentPadding = PaddingValues(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    items(reports, key = { it.id }) { report ->
+                        ReportCard(
+                            report = report,
+                            currencyText = Money.format(report.totalMinor, vm.currency),
+                            onClick = { onOpenReport(report.id) },
+                            onRename = { renaming = report },
+                            onDelete = { deleting = report },
+                        )
+                    }
                 }
             }
         }
@@ -181,18 +236,44 @@ private fun ReportCard(
     onClick: () -> Unit,
     onRename: () -> Unit,
     onDelete: () -> Unit,
+    reordering: Boolean = false,
+    isDragging: Boolean = false,
+    dragHandle: Modifier = Modifier,
 ) {
     var menuOpen by remember { mutableStateOf(false) }
 
-    Card(modifier = Modifier.fillMaxWidth()) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            // Fixed while reordering so the drop target stays pure arithmetic.
+            .then(if (reordering) Modifier.height(REORDER_ROW_HEIGHT) else Modifier),
+    ) {
         Box {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .combinedClickable(onClick = onClick, onLongClick = { menuOpen = true })
+                    // Opening a report or its menu mid-rearrange is never what was meant, so
+                    // while reordering the row carries no click handling at all.
+                    .then(
+                        if (reordering) {
+                            Modifier
+                        } else {
+                            Modifier.combinedClickable(
+                                onClick = onClick,
+                                onLongClick = { menuOpen = true },
+                            )
+                        }
+                    )
                     .padding(16.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
+                if (reordering) {
+                    Icon(
+                        Icons.Filled.Menu,
+                        contentDescription = "Drag to reorder ${report.name}",
+                        modifier = dragHandle.padding(end = 12.dp),
+                    )
+                }
                 Column(Modifier.weight(1f)) {
                     Text(
                         report.name,

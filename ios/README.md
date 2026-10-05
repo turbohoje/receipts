@@ -238,7 +238,9 @@ Working, and verified on both an iPhone 18 Pro and an iPad Pro 13-inch simulator
 - **Receipt photos** — camera capture, photo-library picking, a crop overlay, and storage
   under `Documents/images/`. See "The image pipeline" below.
 - **Reports list** — name, total, receipt count and date range per row; create and delete, with
-  a confirmation that names what is going away.
+  a confirmation that names what is going away. **Edit** puts the list into reorder mode
+  (`EditButton` + `List.onMove`); the same feature on Android is a hand-rolled drag, because
+  its long press already opens the rename/delete menu.
 - **Report detail** — receipts ordered by date then insertion order, per-receipt amounts and a
   section total; delete by swipe.
 - **Receipt edit** — amount parsed through the core's locale-aware `Money.parse`, with a live

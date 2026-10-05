@@ -168,8 +168,15 @@ private class FakeDb {
             receipts.values.filter { it.reportId == reportId }.forEach { receipts.remove(it.id) }
         }
 
+        override suspend fun minSortOrder(): Long? = reports.values.minOfOrNull { it.sortOrder }
+
+        override suspend fun setSortOrder(reportId: String, sortOrder: Long) {
+            reports[reportId]?.let { reports[reportId] = it.copy(sortOrder = sortOrder) }
+        }
+
         // ----- backup / restore -----
-        override suspend fun all(): List<Report> = reports.values.sortedBy { it.createdAt }
+        override suspend fun all(): List<Report> =
+            reports.values.sortedWith(compareBy({ it.sortOrder }, { -it.createdAt }))
         override suspend fun deleteAll() {
             reports.clear()
             receipts.clear() // ON DELETE CASCADE

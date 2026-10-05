@@ -1,6 +1,7 @@
 package cc.rocketscience.receipts.data
 
 import kotlinx.coroutines.flow.Flow
+import cc.rocketscience.receipts.reorder.ReportOrder
 import java.util.UUID
 
 class ReportRepository(
@@ -19,8 +20,31 @@ class ReportRepository(
     suspend fun createReport(name: String): String {
         val ts = now()
         val id = UUID.randomUUID().toString()
-        reportDao.upsert(Report(id = id, name = name.trim(), createdAt = ts, updatedAt = ts))
+        reportDao.upsert(
+            Report(
+                id = id,
+                name = name.trim(),
+                createdAt = ts,
+                updatedAt = ts,
+                // Above everything already there: the report just created is the one about to
+                // be filled in.
+                sortOrder = ReportOrder.sortOrderForNew(reportDao.minSortOrder()),
+            )
+        )
         return id
+    }
+
+    /**
+     * Persists a manual ordering. [orderedIds] is the list top to bottom.
+     *
+     * The whole list is renumbered from zero rather than nudging the row that moved, so the
+     * stored order can never drift into ties or run out of room between two neighbours.
+     */
+    suspend fun reorderReports(orderedIds: List<String>) {
+        val values = ReportOrder.sortOrders(orderedIds.size)
+        orderedIds.forEachIndexed { index, id ->
+            reportDao.setSortOrder(id, values[index])
+        }
     }
 
     suspend fun renameReport(reportId: String, name: String) =
