@@ -2,6 +2,16 @@ import Foundation
 
 // The suite. `swift run RSReceiptsCoreChecks` from ios/RSReceiptsCore.
 // `--write-fixtures` instead rewrites the iOS interop fixture; see fixtures/interop/README.md.
+let repositoryRoot = URL(fileURLWithPath: #filePath)
+    .deletingLastPathComponent().deletingLastPathComponent()
+    .deletingLastPathComponent().deletingLastPathComponent()
+    .deletingLastPathComponent()
+
+if CommandLine.arguments.contains("--write-shared-fixtures") {
+    try writeSharedFixtures(repositoryRoot)
+    exit(0)
+}
+
 if CommandLine.arguments.contains("--write-fixtures") {
     let destination = URL(fileURLWithPath: #filePath)
         .deletingLastPathComponent()   // RSReceiptsCoreChecks
@@ -24,6 +34,8 @@ exportChecks(harness)
 zipChecks(harness)
 imageChecks(harness)
 reportOrderChecks(harness)
+pdfLayoutChecks(harness)
 backupChecks(harness)
+sharedChecks(harness)
 interopChecks(harness)
 harness.summarize()

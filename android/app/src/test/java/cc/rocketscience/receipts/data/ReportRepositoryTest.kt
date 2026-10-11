@@ -29,7 +29,9 @@ class ReportRepositoryTest {
     private fun setUp() {
         imageStore = ImageStore(File(temp.root, "images"))
         db = FakeDb()
-        repo = ReportRepository(db.reportDao, db.receiptDao, imageStore) { 1_000L }
+        repo = ReportRepository(
+            db.reportDao, db.receiptDao, imageStore, db.tombstoneDao, "test-device",
+        ) { 1_000L }
     }
 
     private fun withImage(label: String): String =
@@ -174,6 +176,10 @@ private class FakeDb {
             reports[reportId]?.let { reports[reportId] = it.copy(sortOrder = sortOrder) }
         }
 
+        override suspend fun setShared(reportId: String, shared: Boolean) {
+            reports[reportId]?.let { reports[reportId] = it.copy(isShared = shared) }
+        }
+
         // ----- backup / restore -----
         override suspend fun all(): List<Report> =
             reports.values.sortedWith(compareBy({ it.sortOrder }, { -it.createdAt }))
@@ -202,6 +208,22 @@ private class FakeDb {
         override suspend fun insertAll(receipts: List<Receipt>) {
             receipts.forEach { this@FakeDb.receipts[it.id] = it }
         }
+    }
+
+    val tombstones = linkedMapOf<String, Tombstone>()
+
+    val tombstoneDao = object : TombstoneDao {
+        override suspend fun forReport(reportId: String): List<Tombstone> =
+            tombstones.values.filter { it.reportId == reportId }
+        override suspend fun all(): List<Tombstone> = tombstones.values.toList()
+        override suspend fun upsert(tombstone: Tombstone) {
+            tombstones[tombstone.receiptId] = tombstone
+        }
+        override suspend fun upsertAll(tombstones: List<Tombstone>) {
+            tombstones.forEach { this@FakeDb.tombstones[it.receiptId] = it }
+        }
+        override suspend fun clear(receiptId: String) { tombstones.remove(receiptId) }
+        override suspend fun clearAll() { tombstones.clear() }
     }
 
     fun attachImage(receiptId: String, fileName: String) {

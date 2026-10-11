@@ -98,7 +98,10 @@ struct BackupService {
             throw Failure.refused(problem)
         }
 
-        // Rows.
+        // Rows. Every tombstone describes a row about to be replaced wholesale, so none of
+        // them still means anything — leaving one behind would publish a delete for a receipt
+        // the restore just brought back.
+        try? context.delete(model: StoredTombstone.self)
         try? context.delete(model: StoredReceipt.self)
         try? context.delete(model: StoredReport.self)
 

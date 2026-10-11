@@ -26,6 +26,44 @@ class ReportDetailViewModel(
 
     val reportId: String = checkNotNull(savedStateHandle["reportId"])
 
+    var syncNotice by androidx.compose.runtime.mutableStateOf<String?>(null)
+        private set
+
+    fun dismissSyncNotice() { syncNotice = null }
+
+    /** The way out of a tombstone written in error; see the repository. */
+    fun forgetDeletions() = viewModelScope.launch {
+        val dropped = repository.forgetDeletions(reportId)
+        syncNotice = if (dropped == 0) {
+            "There were no deletions recorded here."
+        } else {
+            "Forgot $dropped deletion${if (dropped == 1) "" else "s"}. Sync now to take " +
+                "whatever the shared file holds."
+        }
+    }
+
+    /**
+     * Merges the bound file and hands back what should be written to it.
+     *
+     * The view model never touches the file itself — reading and writing a content URI needs
+     * a ContentResolver, which belongs to the screen.
+     */
+    /** Delegates to the repository, so this behaves exactly as the reports list does. */
+    fun syncShared(read: () -> cc.rocketscience.receipts.data.ReportRepository.SharedFileRead, write: (String) -> Boolean) = viewModelScope.launch {
+        syncNotice = when (val outcome =
+            repository.syncShared(reportId, currency.currencyCode, read, write)) {
+            is cc.rocketscience.receipts.data.ReportRepository.SyncOutcome.Synced -> outcome.summary
+            is cc.rocketscience.receipts.data.ReportRepository.SyncOutcome.Unreadable ->
+                "Could not sync: ${outcome.detail}"
+            is cc.rocketscience.receipts.data.ReportRepository.SyncOutcome.ReadFailed ->
+                // Nothing was written: overwriting a file we could not read would discard
+                // whatever the other person had put in it.
+                "Could not read the shared file, so nothing was written. ${outcome.detail}."
+            cc.rocketscience.receipts.data.ReportRepository.SyncOutcome.NotWritten ->
+                "Merged here, but the shared file could not be written."
+        }
+    }
+
     val report: StateFlow<ReportSummary?> = repository.observeReport(reportId)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 

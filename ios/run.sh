@@ -7,6 +7,8 @@
 #   ./run.sh --ipad             an iPad simulator, for the split view
 #   ./run.sh --sim "iPhone 17"  any other simulator, matched by name
 #   ./run.sh --hardware         a real iPhone or iPad plugged in over USB
+#   ./run.sh --hardware "Mini Plane"
+#                               name it when more than one device is attached
 #
 # --hardware needs three things the simulator does not:
 #   1. the device on iOS 27 or newer (the deployment target)
@@ -40,13 +42,17 @@ IPHONE="iPhone 18 Pro"
 IPAD="iPad Pro 13-inch (M5)"
 
 device="$IPHONE"
-demo=false; shot=""; checks=false; clean=false; hardware=false
+demo=false; shot=""; checks=false; clean=false; hardware=false; hardware_name=
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --iphone)  device="$IPHONE"; hardware=false ;;
         --ipad)    device="$IPAD"; hardware=false ;;
         --sim)     device="$2"; hardware=false; shift ;;
-        --hardware) hardware=true ;;
+        --hardware)
+            hardware=true
+            # Optional name, so two attached devices are never a coin toss.
+            case "${2:-}" in ""|--*) ;; *) hardware_name="$2"; shift ;; esac
+            ;;
         --demo)    demo=true ;;
         --shot)    shot="$2"; shift ;;
         --checks)  checks=true ;;
@@ -75,14 +81,37 @@ if $checks; then
 fi
 
 if $hardware; then
-    udid="$(xcrun devicectl list devices 2>/dev/null | awk '
+    # Every attached physical device, as "<udid><tab><name>".
+    # No mapfile: macOS ships bash 3.2, which does not have it.
+    attached=()
+    while IFS= read -r line; do attached+=("$line"); done < <(
+        xcrun devicectl list devices 2>/dev/null | awk '
         /\(UDID\)/ && !/simulated/ && /available|connected/ {
             match($0, /[0-9A-F]{8}-[0-9A-F]{16}/)
-            if (RSTART) { print substr($0, RSTART, RLENGTH); exit }
-        }')"
-    [[ -n "$udid" ]] || die "no physical device found. Plug one in and unlock it, then:
+            if (!RSTART) next
+            id = substr($0, RSTART, RLENGTH)
+            name = $0; sub(/[ ]{2,}.*/, "", name)
+            print id "\t" name
+        }'
+    )
+
+    [[ ${#attached[@]} -gt 0 ]] || die "no physical device found. Plug one in and unlock it, then:
     xcrun devicectl list devices"
-    name="$(xcrun devicectl list devices 2>/dev/null | grep "$udid" | sed 's/  */ /g' | cut -d' ' -f1-2)"
+
+    if [[ -n "$hardware_name" ]]; then
+        match="$(printf '%s\n' "${attached[@]}" | grep -i -- "$hardware_name" | head -1)"
+        [[ -n "$match" ]] || die "no attached device matching \"$hardware_name\". Attached:
+$(printf '%s\n' "${attached[@]}" | cut -f2 | sed 's|^|  |')"
+    elif [[ ${#attached[@]} -gt 1 ]]; then
+        # Installing onto the wrong one is the kind of mistake that is obvious only afterwards.
+        die "more than one device is attached; name the one you mean:
+$(printf '%s\n' "${attached[@]}" | cut -f2 | sed 's|^|  ./run.sh --hardware "|; s|$|"|')"
+    else
+        match="${attached[0]}"
+    fi
+
+    udid="${match%%$'\t'*}"
+    name="${match#*$'\t'}"
     step "Target: $name ($udid)"
 fi
 

@@ -52,4 +52,12 @@ class PdfLayoutTest {
             assertTrue("page $i held ${range.count()} > $capacity", range.count() <= capacity)
         }
     }
+
+    @Test
+    fun `pagination matches the iOS geometry exactly`() {
+        // The constants are a cross-platform contract: a report exported from either phone
+        // must break across pages at the same rows. The iOS check asserts the same pair.
+        assertEquals(31, PdfLayout.rowsPerPage(firstPage = true))
+        assertEquals(35, PdfLayout.rowsPerPage(firstPage = false))
+    }
 }

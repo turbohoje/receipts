@@ -6,6 +6,10 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.text.selection.SelectionContainer
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -28,6 +32,8 @@ import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenuItem
@@ -64,6 +70,7 @@ import coil3.compose.AsyncImage
 import cc.rocketscience.receipts.data.Receipt
 import cc.rocketscience.receipts.export.ExportResult
 import cc.rocketscience.receipts.export.shareExport
+import cc.rocketscience.receipts.shared.SharedFileLinks
 import cc.rocketscience.receipts.image.ImagePipeline
 import cc.rocketscience.receipts.money.Money
 import cc.rocketscience.receipts.ui.ConfirmDialog
@@ -72,6 +79,81 @@ import cc.rocketscience.receipts.ui.ImageSourceSheet
 import cc.rocketscience.receipts.ui.formatDate
 import kotlinx.coroutines.launch
 import java.io.File
+
+/**
+ * Where this report actually goes.
+ *
+ * The list only marks a report as shared; the whole location belongs here, where there is room
+ * for it. A content URI is opaque by design, so it is shown as selectable reference text
+ * rather than dressed up as a file path it is not.
+ */
+@Composable
+private fun SharedFileDialog(
+    reportName: String,
+    displayName: String?,
+    fullLocation: String?,
+    reachable: Boolean,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = { TextButton(onClick = onDismiss) { Text("Done") } },
+        title = { Text("Shared file") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                if (fullLocation == null) {
+                    Text(
+                        "\u201c$reportName\u201d is marked shared but has no file yet. " +
+                            "Use \u201cChoose a shared file\u2026\u201d from the reports list " +
+                            "to pick one.",
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                } else {
+                    Text(
+                        displayName ?: "(unnamed)",
+                        style = MaterialTheme.typography.titleSmall,
+                    )
+                    if (!reachable) {
+                        Text(
+                            "This file cannot be read right now. It may have been moved, " +
+                                "deleted, or the permission withdrawn \u2014 pick it again " +
+                                "with \u201cChange shared file\u2026\u201d.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                    }
+                    Text(
+                        "Full location",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    SelectionContainer {
+                        Text(
+                            fullLocation,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier
+                                .heightIn(max = 160.dp)
+                                .verticalScroll(rememberScrollState()),
+                        )
+                    }
+                    Text(
+                        "Syncing merges whatever is in this file, then writes the result back " +
+                            "to it. Anyone you share the file with sees the same report.",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                    Text(
+                        "To open the file itself, find it in Google Drive. The app holds a " +
+                            "storage reference rather than a Drive link, which is why it " +
+                            "needs no Google sign-in.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+        },
+    )
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -86,6 +168,8 @@ fun ReportDetailScreen(
 ) {
     val vm: ReportDetailViewModel = viewModel(factory = factory)
     val context = LocalContext.current
+    val links = remember { SharedFileLinks(context) }
+    var showSharedFile by remember { mutableStateOf(false) }
     val snackbar = remember { SnackbarHostState() }
     val report by vm.report.collectAsState()
     val receipts by vm.receipts.collectAsState()
@@ -152,6 +236,28 @@ fun ReportDetailScreen(
                                 vm.exportZip { share(context, it, report?.name) }
                             },
                         )
+                        if (report?.isShared == true) {
+                            HorizontalDivider()
+                            DropdownMenuItem(
+                                text = { Text("Sync now") },
+                                enabled = links.uriFor(vm.reportId) != null,
+                                onClick = {
+                                    menuOpen = false
+                                    vm.syncShared(
+                                        read = { links.read(vm.reportId) },
+                                        write = { json -> links.write(vm.reportId, json) },
+                                    )
+                                },
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Shared file\u2026") },
+                                onClick = { menuOpen = false; showSharedFile = true },
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Forget deletions here") },
+                                onClick = { menuOpen = false; vm.forgetDeletions() },
+                            )
+                        }
                         HorizontalDivider()
                         DropdownMenuItem(
                             text = { Text("Rename") },
@@ -235,6 +341,26 @@ fun ReportDetailScreen(
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             CircularProgressIndicator()
         }
+    }
+
+    vm.syncNotice?.let { notice ->
+        AlertDialog(
+            onDismissRequest = vm::dismissSyncNotice,
+            confirmButton = { TextButton(onClick = vm::dismissSyncNotice) { Text("OK") } },
+            title = { Text("Shared report") },
+            text = { Text(notice) },
+        )
+    }
+
+    if (showSharedFile) {
+        val id = vm.reportId
+        SharedFileDialog(
+            reportName = report?.name ?: "This report",
+            displayName = links.displayName(id),
+            fullLocation = links.fullLocation(id),
+            reachable = links.isReachable(id),
+            onDismiss = { showSharedFile = false },
+        )
     }
 
     if (renaming) {

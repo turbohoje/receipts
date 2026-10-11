@@ -33,10 +33,28 @@ class AppContainer(context: Context) {
     val exporter: Exporter by lazy { Exporter(appContext, imageStore) }
 
     val repository: ReportRepository by lazy {
-        ReportRepository(database.reportDao(), database.receiptDao(), imageStore)
+        ReportRepository(
+            database.reportDao(),
+            database.receiptDao(),
+            imageStore,
+            database.tombstoneDao(),
+            deviceId,
+        )
     }
 
     val settings: SettingsStore by lazy { SettingsStore(appContext) }
+
+    /**
+     * A stable id for this install, used as `updatedBy` on every shared record and as the
+     * merge's tie-break. Stable matters: a device whose id changed would start losing ties it
+     * used to win, and two sides could disagree about a record neither had touched.
+     */
+    val deviceId: String by lazy {
+        val prefs = appContext.getSharedPreferences("shared-mode", android.content.Context.MODE_PRIVATE)
+        prefs.getString("deviceId", null) ?: java.util.UUID.randomUUID().toString().also {
+            prefs.edit().putString("deviceId", it).apply()
+        }
+    }
 
     val contentIo: ContentIo by lazy { ContentIo(appContext) }
 

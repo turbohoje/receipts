@@ -14,6 +14,7 @@ interface ReportDao {
         SELECT r.id            AS id,
                r.name          AS name,
                r.createdAt     AS createdAt,
+               r.isShared      AS isShared,
                COUNT(rc.id)                    AS receiptCount,
                COALESCE(SUM(rc.amountMinor),0) AS totalMinor,
                MIN(rc.date)                    AS firstDate,
@@ -31,6 +32,7 @@ interface ReportDao {
         SELECT r.id            AS id,
                r.name          AS name,
                r.createdAt     AS createdAt,
+               r.isShared      AS isShared,
                COUNT(rc.id)                    AS receiptCount,
                COALESCE(SUM(rc.amountMinor),0) AS totalMinor,
                MIN(rc.date)                    AS firstDate,
@@ -66,6 +68,9 @@ interface ReportDao {
 
     @Query("UPDATE reports SET sortOrder = :sortOrder WHERE id = :reportId")
     suspend fun setSortOrder(reportId: String, sortOrder: Long)
+
+    @Query("UPDATE reports SET isShared = :shared WHERE id = :reportId")
+    suspend fun setShared(reportId: String, shared: Boolean)
 
     /** Cascades to receipts. Used only by restore, which replaces everything. */
     @Query("DELETE FROM reports")
@@ -110,6 +115,46 @@ interface ReceiptDao {
     @Query("SELECT * FROM receipts ORDER BY date, createdAt")
     suspend fun all(): List<Receipt>
 
+    /**
+     * Repairs rows written before receipts carried a modification time.
+     *
+     * A zero here means 1970, so the row loses every merge it is ever in — a collaborator's
+     * copy always looks newer. `createdAt` is the honest answer for a row that has not been
+     * edited since it was made.
+     */
+    @Query("UPDATE receipts SET updatedAt = createdAt WHERE updatedAt = 0")
+    suspend fun backfillUpdatedAt(): Int
+
     @Insert
     suspend fun insertAll(receipts: List<Receipt>)
+}
+
+/**
+ * Deleted receipts, kept so the deletion survives a merge.
+ *
+ * Separate from [ReceiptDao] on purpose: nothing that reads receipts needs to know this table
+ * exists, so totals, exports and the orphan sweep are untouched by shared mode.
+ */
+@Dao
+interface TombstoneDao {
+
+    @Query("SELECT * FROM tombstones WHERE reportId = :reportId")
+    suspend fun forReport(reportId: String): List<Tombstone>
+
+    @Query("SELECT * FROM tombstones")
+    suspend fun all(): List<Tombstone>
+
+    @Upsert
+    suspend fun upsert(tombstone: Tombstone)
+
+    @Upsert
+    suspend fun upsertAll(tombstones: List<Tombstone>)
+
+    /** Dropped when a receipt with the same id legitimately comes back. */
+    @Query("DELETE FROM tombstones WHERE receiptId = :receiptId")
+    suspend fun clear(receiptId: String)
+
+    /** Used by restore, which replaces every row and so invalidates every tombstone. */
+    @Query("DELETE FROM tombstones")
+    suspend fun clearAll()
 }

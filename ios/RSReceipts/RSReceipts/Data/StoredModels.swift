@@ -23,6 +23,10 @@ final class StoredReport {
     /// full of zeroes looks exactly as it did before dragging existed.
     var sortOrder: Int64 = 0
 
+    /// Whether this report participates in shared mode. Local to this device: a report you
+    /// share is one *you* publish, and the flag says nothing about anyone else.
+    var isShared: Bool = false
+
     /// Room gets this from `onDelete = CASCADE`; SwiftData needs it spelled out. Deleting a
     /// report must take its receipts with it — image files are a separate sweep.
     @Relationship(deleteRule: .cascade, inverse: \StoredReceipt.report)
@@ -33,13 +37,15 @@ final class StoredReport {
         name: String,
         createdAt: EpochMillis,
         updatedAt: EpochMillis,
-        sortOrder: Int64 = 0
+        sortOrder: Int64 = 0,
+        isShared: Bool = false
     ) {
         self.id = id
         self.name = name
         self.createdAt = createdAt
         self.updatedAt = updatedAt
         self.sortOrder = sortOrder
+        self.isShared = isShared
     }
 
     /// Ordered by date, then insertion order, per the spec.
@@ -79,6 +85,10 @@ final class StoredReceipt {
     /// Filename inside the image store, or nil until a photo is attached.
     var imageFile: String?
     var createdAt: EpochMillis = 0
+    /// Last modification, for shared-mode last-write-wins. Defaults to 0 and is backfilled
+    /// from `createdAt` at startup: without it an edited receipt would look as old as the day
+    /// it was made, and a remote copy would win every merge, silently discarding local work.
+    var updatedAt: EpochMillis = 0
     var report: StoredReport?
 
     init(
@@ -88,6 +98,7 @@ final class StoredReceipt {
         date: EpochMillis,
         imageFile: String? = nil,
         createdAt: EpochMillis,
+        updatedAt: EpochMillis? = nil,
         report: StoredReport? = nil
     ) {
         self.id = id
@@ -96,6 +107,7 @@ final class StoredReceipt {
         self.date = date
         self.imageFile = imageFile
         self.createdAt = createdAt
+        self.updatedAt = updatedAt ?? createdAt
         self.report = report
     }
 }
@@ -119,5 +131,28 @@ extension StoredReceipt {
             date: date,
             imageFile: imageFile,
             createdAt: createdAt)
+    }
+}
+
+
+/// A deleted receipt, remembered so the deletion can propagate.
+///
+/// Absence has no timestamp: without this, a device that still holds the row would reintroduce
+/// it on every merge. Kept as its own model rather than a soft-delete flag on `StoredReceipt`
+/// so that no existing query — totals, exports, the orphan sweep — has to learn to exclude
+/// anything.
+@Model
+final class StoredTombstone {
+    #Unique<StoredTombstone>([\.receiptId])
+    var receiptId: String = ""
+    var reportId: String = ""
+    var deletedAt: EpochMillis = 0
+    var deletedBy: String = ""
+
+    init(receiptId: String, reportId: String, deletedAt: EpochMillis, deletedBy: String) {
+        self.receiptId = receiptId
+        self.reportId = reportId
+        self.deletedAt = deletedAt
+        self.deletedBy = deletedBy
     }
 }

@@ -18,6 +18,8 @@ class ReceiptsApp : Application() {
         // Reconcile disk against the database: collect images left behind by a delete that
         // was interrupted between removing rows and removing files.
         CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
+            // A receipt stamped 1970 loses every merge it is in; see the DAO.
+            runCatching { container.repository.repairMissingTimestamps() }
             runCatching { container.repository.sweepOrphanImages() }
             // Temp captures from a flow the user backed out of.
             runCatching { container.imagePipeline.clearTempDir() }

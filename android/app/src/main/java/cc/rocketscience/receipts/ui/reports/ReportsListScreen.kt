@@ -26,6 +26,7 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.Card
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -37,7 +38,17 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.platform.LocalContext
+import cc.rocketscience.receipts.shared.SharedFileLinks
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -76,8 +87,83 @@ fun ReportsListScreen(
 
     var showCreate by remember { mutableStateOf(false) }
     var reordering by remember { mutableStateOf(false) }
+    var addMenuOpen by remember { mutableStateOf(false) }
+
     var renaming by remember { mutableStateOf<ReportSummary?>(null) }
     var deleting by remember { mutableStateOf<ReportSummary?>(null) }
+
+    val context = LocalContext.current
+    val links = remember { SharedFileLinks(context) }
+
+    // The system picker is what reaches Google Drive, local storage, or anywhere else the
+    // user has a provider for. The app never talks to any service itself.
+    val createShared = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("application/json")
+    ) { uri ->
+        val pending = vm.pendingShare
+        if (uri != null && pending != null) {
+            val persisted = links.link(pending.reportId, uri)
+            if (links.write(pending.reportId, pending.json)) {
+                vm.notify(
+                    if (persisted) {
+                        "Shared to ${links.displayName(pending.reportId)}. " +
+                            "This report now syncs with that file."
+                    } else {
+                        "Written, but this location would not grant lasting access, so you " +
+                            "will be asked for the file again next time."
+                    }
+                )
+            } else {
+                vm.notify("The file could not be written.")
+            }
+        }
+        vm.consumeShare()
+    }
+
+    // Joining a report someone else already shared.
+    val openShared = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri != null) {
+            val json = runCatching {
+                context.contentResolver.openInputStream(uri)?.use {
+                    it.readBytes().toString(Charsets.UTF_8)
+                }
+            }.getOrNull()
+            if (json == null) {
+                vm.notify("That file could not be read.")
+            } else {
+                runCatching {
+                    val reportId = Json.parseToJsonElement(json)
+                        .jsonObject["reportId"]?.jsonPrimitive?.content
+                    if (reportId != null) links.link(reportId, uri)
+                }
+                vm.importShared(json)
+            }
+        }
+    }
+
+    // A pending export with a bound file needs no dialog: write straight back to it.
+    LaunchedEffect(vm.pendingShare) {
+        val pending = vm.pendingShare ?: return@LaunchedEffect
+        if (pending.targetUri == null) {
+            createShared.launch(pending.suggestedName)
+        } else {
+            val ok = links.write(pending.reportId, pending.json)
+            vm.notify(
+                if (ok) "Synced with ${links.displayName(pending.reportId) ?: "the shared file"}."
+                else "The bound file could not be written. Use \u201cChange shared file\u2026\u201d to pick it again."
+            )
+            vm.consumeShare()
+        }
+    }
+
+    // Checked on open: fold in anything collaborators wrote since this device last looked.
+    LaunchedEffect(Unit) {
+        for (reportId in links.linkedReportIds()) {
+            vm.ingestOnOpen(links.read(reportId))
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -114,8 +200,28 @@ fun ReportsListScreen(
         },
         floatingActionButton = {
             if (!reordering) {
-                FloatingActionButton(onClick = { showCreate = true }) {
-                    Icon(Icons.Filled.Add, contentDescription = "New report")
+                // Joining someone else's shared report is also "adding a report", so it
+                // belongs here rather than hidden behind a toolbar icon.
+                Box {
+                    FloatingActionButton(onClick = { addMenuOpen = true }) {
+                        Icon(Icons.Filled.Add, contentDescription = "Add a report")
+                    }
+                    DropdownMenu(
+                        expanded = addMenuOpen,
+                        onDismissRequest = { addMenuOpen = false },
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text("New report") },
+                            onClick = { addMenuOpen = false; showCreate = true },
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Add a shared report\u2026") },
+                            onClick = {
+                                addMenuOpen = false
+                                openShared.launch(arrayOf("application/json"))
+                            },
+                        )
+                    }
                 }
             }
         },
@@ -165,11 +271,51 @@ fun ReportsListScreen(
                             onClick = { onOpenReport(report.id) },
                             onRename = { renaming = report },
                             onDelete = { deleting = report },
+                            onShare = {
+                                vm.prepareShare(
+                                    report.id, report.name,
+                                    read = { links.read(report.id) },
+                                    write = { json -> links.write(report.id, json) },
+                                    targetUri = null,
+                                )
+                            },
+                            onStopSharing = {
+                                links.unlink(report.id)
+                                vm.setShared(report.id, false)
+                            },
+                            onExportShared = {
+                                // Merge whatever is in the bound file first, then write back.
+                                vm.prepareShare(
+                                    report.id, report.name,
+                                    read = { links.read(report.id) },
+                                    write = { json -> links.write(report.id, json) },
+                                    targetUri = links.uriFor(report.id)?.toString(),
+                                )
+                            },
+                            onChangeSharedFile = {
+                                links.unlink(report.id)
+                                vm.prepareShare(
+                                    report.id, report.name,
+                                    read = { links.read(report.id) },
+                                    write = { json -> links.write(report.id, json) },
+                                    targetUri = null,
+                                )
+                            },
+                            sharedFileName = links.displayName(report.id),
                         )
                     }
                 }
             }
         }
+    }
+
+    vm.sharedNotice?.let { notice ->
+        AlertDialog(
+            onDismissRequest = vm::dismissNotice,
+            confirmButton = { TextButton(onClick = vm::dismissNotice) { Text("OK") } },
+            title = { Text("Shared report") },
+            text = { Text(notice) },
+        )
     }
 
     if (showCreate) {
@@ -236,6 +382,11 @@ private fun ReportCard(
     onClick: () -> Unit,
     onRename: () -> Unit,
     onDelete: () -> Unit,
+    onShare: () -> Unit = {},
+    onStopSharing: () -> Unit = {},
+    onExportShared: () -> Unit = {},
+    onChangeSharedFile: () -> Unit = {},
+    sharedFileName: String? = null,
     reordering: Boolean = false,
     isDragging: Boolean = false,
     dragHandle: Modifier = Modifier,
@@ -275,11 +426,28 @@ private fun ReportCard(
                     )
                 }
                 Column(Modifier.weight(1f)) {
-                    Text(
-                        report.name,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold,
-                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        if (report.isShared) {
+                            // Just a mark that it is shared; which file it goes to is in the
+                            // report's own menu, where there is room to show it properly.
+                            Icon(
+                                Icons.Filled.Share,
+                                contentDescription = sharedFileName
+                                    ?.let { "Shared with $it" }
+                                    ?: "Shared, no file chosen",
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier
+                                    .size(14.dp)
+                                    .padding(end = 0.dp),
+                            )
+                            Spacer(Modifier.width(6.dp))
+                        }
+                        Text(
+                            report.name,
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                    }
                     val subtitle = listOfNotNull(
                         "${report.receiptCount} " +
                             if (report.receiptCount == 1) "receipt" else "receipts",
@@ -300,6 +468,32 @@ private fun ReportCard(
                     text = { Text("Rename") },
                     onClick = { menuOpen = false; onRename() },
                 )
+                if (report.isShared) {
+                    DropdownMenuItem(
+                        text = {
+                            Text(
+                                if (sharedFileName != null) "Sync with $sharedFileName"
+                                else "Choose a shared file\u2026"
+                            )
+                        },
+                        onClick = { menuOpen = false; onExportShared() },
+                    )
+                    if (sharedFileName != null) {
+                        DropdownMenuItem(
+                            text = { Text("Change shared file\u2026") },
+                            onClick = { menuOpen = false; onChangeSharedFile() },
+                        )
+                    }
+                    DropdownMenuItem(
+                        text = { Text("Stop sharing") },
+                        onClick = { menuOpen = false; onStopSharing() },
+                    )
+                } else {
+                    DropdownMenuItem(
+                        text = { Text("Share this report") },
+                        onClick = { menuOpen = false; onShare() },
+                    )
+                }
                 DropdownMenuItem(
                     text = { Text("Delete") },
                     onClick = { menuOpen = false; onDelete() },

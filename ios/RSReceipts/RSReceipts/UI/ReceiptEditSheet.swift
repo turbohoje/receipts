@@ -19,6 +19,7 @@ struct ReceiptEditSheet: View {
     /// Written during this edit but not yet committed; discarded on cancel.
     @State private var stagedImage: String?
     @State private var addingImage = false
+    @State private var viewingImage: UIImage?
 
     private enum Field { case description, amount }
     @FocusState private var focus: Field?
@@ -85,6 +86,9 @@ struct ReceiptEditSheet: View {
                             .frame(maxWidth: .infinity)
                             .clipShape(RoundedRectangle(cornerRadius: 8))
                             .listRowInsets(EdgeInsets())
+                            .onTapGesture { viewingImage = image }
+                            .accessibilityAddTraits(.isButton)
+                            .accessibilityLabel("Receipt photo. Opens full screen.")
                         Button("Replace photo", systemImage: "camera") { addingImage = true }
                         Button("Remove photo", systemImage: "trash", role: .destructive) {
                             removeImage()
@@ -100,6 +104,7 @@ struct ReceiptEditSheet: View {
                     }
                 }
             }
+            .fullScreenCover(item: $viewingImage) { ImageViewer(image: $0) }
             .addImageFlow(isPresented: $addingImage, pipeline: container.pipeline) { stored in
                 // Written to disk already, but the row still points at the old one until Save,
                 // so a cancel leaves the receipt exactly as it was.
@@ -161,6 +166,9 @@ struct ReceiptEditSheet: View {
             receipt.amountMinor = amount
             receipt.date = date.epochMillis
             receipt.imageFile = imageFile
+            // The edit has to be newer than whatever a collaborator holds, or last-write-wins
+            // silently discards it on the next sync.
+            receipt.updatedAt = now
             if let previous, previous != imageFile {
                 container.imageStore.delete(previous)
             }
@@ -178,4 +186,10 @@ struct ReceiptEditSheet: View {
         try? context.save()
         dismiss()
     }
+}
+
+
+/// `fullScreenCover(item:)` needs identity; a UIImage has none of its own.
+extension UIImage: @retroactive Identifiable {
+    public var id: ObjectIdentifier { ObjectIdentifier(self) }
 }

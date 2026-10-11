@@ -91,6 +91,10 @@ class BackupManager(
                 val manifest = outcome.manifest
 
                 database.withTransaction {
+                    // Every tombstone describes a row that is about to be replaced wholesale,
+                    // so none of them still means anything. Leaving one behind would publish
+                    // a delete for a receipt the restore just brought back.
+                    database.tombstoneDao().clearAll()
                     database.reportDao().deleteAll() // cascades to receipts
                     database.reportDao().insertAll(
                         manifest.reports.map {

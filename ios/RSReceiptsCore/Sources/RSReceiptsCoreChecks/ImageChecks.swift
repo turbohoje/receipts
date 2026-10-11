@@ -235,3 +235,57 @@ func reportOrderChecks(_ harness: Harness) {
         try expect(sorted.map(\.name), ["newer", "older"])
     }
 }
+
+/// Ported from Android's `PdfLayoutTest`.
+///
+/// When this arithmetic is wrong it does not crash — it silently drops line items off the
+/// bottom of a page, which is the worst possible failure for an expense report.
+func pdfLayoutChecks(_ harness: Harness) {
+    harness.section("PDF layout")
+
+    harness.check("the first page holds fewer rows than the rest") {
+        try expectTrue(
+            PdfLayout.rowsPerPage(firstPage: true) < PdfLayout.rowsPerPage(firstPage: false),
+            "first page should be smaller: \(PdfLayout.rowsPerPage(firstPage: true)) vs "
+                + "\(PdfLayout.rowsPerPage(firstPage: false))")
+    }
+
+    harness.check("an empty report still produces one page") {
+        try expect(PdfLayout.paginate(rowCount: 0), [0..<0])
+    }
+
+    harness.check("a short report fits on a single page") {
+        let pages = PdfLayout.paginate(rowCount: 5)
+        try expect(pages.count, 1)
+        try expect(pages[0], 0..<5)
+    }
+
+    harness.check("every row appears exactly once across pages") {
+        for count in [1, 14, 25, 26, 27, 60, 200] {
+            let covered = PdfLayout.paginate(rowCount: count).flatMap { Array($0) }
+            try expect(covered, Array(0..<count), "count=\(count)")
+        }
+    }
+
+    harness.check("pages are contiguous with no gaps or overlaps") {
+        let pages = PdfLayout.paginate(rowCount: 200)
+        for (a, b) in zip(pages, pages.dropFirst()) {
+            try expect(a.upperBound, b.lowerBound, "page boundary")
+        }
+    }
+
+    harness.check("no page exceeds its row capacity") {
+        let pages = PdfLayout.paginate(rowCount: 200)
+        for (index, range) in pages.enumerated() {
+            let capacity = PdfLayout.rowsPerPage(firstPage: index == 0)
+            try expectTrue(range.count <= capacity, "page \(index): \(range.count) > \(capacity)")
+        }
+    }
+
+    harness.check("pagination matches Android's geometry exactly") {
+        // The constants are the contract: a report exported from either phone must break
+        // across pages at the same rows.
+        try expect(PdfLayout.rowsPerPage(firstPage: true), 31)
+        try expect(PdfLayout.rowsPerPage(firstPage: false), 35)
+    }
+}

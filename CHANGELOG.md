@@ -1,5 +1,98 @@
 # Release notes
 
+## 0.2.0 (versionCode 5) — sharing a report with someone else
+
+A report can now be shared. Save it to a file, hand that file to whoever you are splitting
+costs with, and both devices keep it current: each side merges the other's changes rather
+than overwriting them.
+
+### Store "What's new" (Play allows 500 characters)
+
+> Share a report with someone else. Save it to a file in Google Drive (or anywhere else), share that file, and both devices keep it up to date: edits merge by time, deletions carry across, and receipt photos travel inside the file. Also new: drag reports into whatever order you like. Backups and ZIP exports are slightly smaller, and receipts added on one device are no longer lost when two people edit at once.
+
+*(410 characters.)*
+
+### What's new
+
+**Shared reports**
+- Long-press a report → **Share this report** and pick where the file goes. Google Drive,
+  another cloud provider, or local storage — the system file picker decides, and the app
+  holds no account and talks to no service.
+- **+ → Add a shared report…** takes someone else's file and folds it into your list.
+- Each shared report remembers its own file, so afterwards syncing is one tap: **Sync now**
+  in the report's menu, or just open the app — bound files are re-read on launch.
+- **Edits merge rather than overwrite.** Two people can change different receipts, or the
+  same one, and both sets of changes survive. Where they genuinely conflict the later edit
+  wins, decided by when each was made.
+- **Deletions travel.** Deleting a receipt from a shared report removes it for everyone,
+  instead of reappearing the next time someone syncs.
+- **Photos travel too**, carried inside the file itself, so there is nothing to send
+  alongside it and nothing to go missing.
+- Every sync says what it did — how many receipts were added, updated, already matched,
+  deleted by someone else, or sent from this device.
+- **Shared file…** in the report menu shows which file a report is bound to, whether it can
+  still be reached, and how to point it somewhere else.
+
+**Reordering**
+- Reports can be dragged into any order. Tap the reorder button, drag by the handle, tap
+  done. New reports still arrive at the top, and a list nobody has reordered looks exactly
+  as it did before.
+
+**Smaller files**
+- Receipt images inside backups and ZIP exports are stored rather than compressed. A JPEG
+  does not compress — the old behaviour made archives marginally *larger* and cost time on
+  every image.
+
+### Fixed
+
+- A new receipt was recorded with no modification time, which in a shared report meant it
+  always lost to a collaborator's copy. Existing receipts are repaired on first launch.
+- Editing a receipt did not update its modification time either, so the edit could be
+  silently discarded by the next sync.
+- A shared file that could not be read was treated as an empty one, and the next sync wrote
+  over it. Nothing is written now unless the file was genuinely read or genuinely absent.
+- Restoring a backup left deletion records behind, which could remove a restored receipt
+  from a collaborator's copy.
+
+### Upgrading
+
+The database schema changes twice on first launch (manual ordering, then sharing). Existing
+reports, receipts and images are carried through untouched, and a list nobody has reordered
+keeps the order it had.
+
+Backups written by 0.1.3 still restore. Backups written by 0.2.0 carry a newer format marker
+and **will not restore on 0.1.3**, so update every device you back up to.
+
+### Known limits
+
+- One currency for the whole app, taken from the device locale. A shared report records the
+  currency it was written with, but amounts are shown in the reader's own — do not share a
+  report between devices set to different currencies.
+- Deleting a whole shared report is local only; whoever still has the file can bring it back.
+- Sharing has no conflict prompt. The later edit wins silently.
+- A shared file is rewritten in full on every sync, photos included, so a long report means a
+  large upload each time.
+- Deleting a report or receipt is immediate; there is no undo. Take a backup first.
+- Backups are manual; there is no scheduled or automatic backup.
+
+### Not yet built
+
+Automatic amount and date recognition from the receipt image, expense categories with
+subtotals, per-receipt currencies, scheduled backups, and mileage or per-diem entries that
+have no receipt to photograph.
+
+---
+
+Built and verified on a Pixel 11 (Android 17). 125 unit tests cover money parsing and
+formatting, report totalling and ordering, CSV escaping, PDF pagination, image handling,
+deletion and cascade, archive structure, schema migrations, backup round-tripping, and the
+rules that decide what a sync is allowed to write.
+
+An iOS version exists in this repository and is not released. The two apps share a backup and
+sharing format, verified by fixtures each platform writes and the other reads.
+
+---
+
 ## 0.1.3 (versionCode 4) — first public release
 
 Receipts in, expense report out. Capture receipts with the camera, group them into reports

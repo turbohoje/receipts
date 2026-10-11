@@ -25,6 +25,12 @@ data class Report(
      */
     @ColumnInfo(defaultValue = "0")
     val sortOrder: Long = 0,
+    /**
+     * Whether this report participates in shared mode. Local to this device: a report you
+     * share is one *you* publish, and the flag says nothing about anyone else.
+     */
+    @ColumnInfo(defaultValue = "0")
+    val isShared: Boolean = false,
 )
 
 @Entity(
@@ -50,6 +56,29 @@ data class Receipt(
     /** Filename inside the image store, or null until a photo is attached (phase 2). */
     val imageFile: String?,
     val createdAt: Long,
+    /**
+     * Last modification, for shared-mode last-write-wins. Backfilled from [createdAt] by the
+     * schema-2-to-3 migration: without it an edited receipt would look as old as the day it
+     * was made, and a remote copy would win every merge, silently discarding local work.
+     */
+    @ColumnInfo(defaultValue = "0")
+    val updatedAt: Long = 0,
+)
+
+/**
+ * A deleted receipt, remembered so the deletion can propagate.
+ *
+ * Absence has no timestamp: without this, a device that still holds the row would reintroduce
+ * it on every merge. Kept in its own table rather than as a soft-delete flag on [Receipt] so
+ * that no existing query — totals, exports, the orphan sweep — has to learn to exclude
+ * anything.
+ */
+@Entity(tableName = "tombstones")
+data class Tombstone(
+    @PrimaryKey val receiptId: String,
+    val reportId: String,
+    val deletedAt: Long,
+    val deletedBy: String,
 )
 
 /**
@@ -60,6 +89,7 @@ data class ReportSummary(
     val id: String,
     val name: String,
     val createdAt: Long,
+    @ColumnInfo(name = "isShared") val isShared: Boolean = false,
     @ColumnInfo(name = "receiptCount") val receiptCount: Int,
     @ColumnInfo(name = "totalMinor") val totalMinor: Long,
     @ColumnInfo(name = "firstDate") val firstDate: Long?,
