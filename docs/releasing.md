@@ -118,6 +118,10 @@ Nothing here is automated, because every step needs the Apple ID.
    details** and **territory availability** are separate resources that may not exist at all.
    App Privacy is browser-only. The first run of this is written up in
    [`release-0.2.1.md`](release-0.2.1.md).
+6. **Fill in App Review Information → Notes, and leave it filled in.** An account with little
+   review history gets asked for a screen recording and a written account of the app before
+   anyone looks at it — 0.2.1 was rejected on exactly that. The reply, and `ios/tour.sh`,
+   which films the app being used, are in [`app-review.md`](app-review.md).
 
 **What the iOS build needs that Android does not:** a development build installed over USB
 expires with its provisioning profile and stops launching. That affects test devices only, not

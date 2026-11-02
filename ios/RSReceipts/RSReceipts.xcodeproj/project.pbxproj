@@ -12,10 +12,12 @@
 
 /* Begin PBXFileReference section */
 		AA00000000000000000003 /* RS Receipts.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "RS Receipts.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		AA00000000000000000013 /* RSReceiptsUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = RSReceiptsUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		AA00000000000000000006 /* RSReceipts */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = RSReceipts; sourceTree = "<group>"; };
+		AA00000000000000000014 /* RSReceiptsUITests */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = RSReceiptsUITests; sourceTree = "<group>"; };
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -27,6 +29,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		AA00000000000000000017 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -34,6 +43,7 @@
 			isa = PBXGroup;
 			children = (
 				AA00000000000000000006 /* RSReceipts */,
+				AA00000000000000000014 /* RSReceiptsUITests */,
 				AA00000000000000000005 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -42,6 +52,7 @@
 			isa = PBXGroup;
 			children = (
 				AA00000000000000000003 /* RS Receipts.app */,
+				AA00000000000000000013 /* RSReceiptsUITests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -72,7 +83,48 @@
 			productReference = AA00000000000000000003 /* RS Receipts.app */;
 			productType = "com.apple.product-type.application";
 		};
+		AA00000000000000000015 /* RSReceiptsUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = AA00000000000000000019 /* Build configuration list for PBXNativeTarget "RSReceiptsUITests" */;
+			buildPhases = (
+				AA00000000000000000016 /* Sources */,
+				AA00000000000000000017 /* Frameworks */,
+				AA00000000000000000018 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				AA00000000000000000022 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				AA00000000000000000014 /* RSReceiptsUITests */,
+			);
+			name = RSReceiptsUITests;
+			packageProductDependencies = (
+			);
+			productName = RSReceiptsUITests;
+			productReference = AA00000000000000000013 /* RSReceiptsUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
 /* End PBXNativeTarget section */
+
+/* Begin PBXContainerItemProxy section */
+		AA00000000000000000023 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = AA00000000000000000001 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = AA00000000000000000002;
+			remoteInfo = RSReceipts;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXTargetDependency section */
+		AA00000000000000000022 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = AA00000000000000000002 /* RSReceipts */;
+			targetProxy = AA00000000000000000023 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin PBXProject section */
 		AA00000000000000000001 /* Project object */ = {
@@ -84,6 +136,10 @@
 				TargetAttributes = {
 					AA00000000000000000002 = {
 						CreatedOnToolsVersion = 27.0;
+					};
+					AA00000000000000000015 = {
+						CreatedOnToolsVersion = 27.0;
+						TestTargetID = AA00000000000000000002;
 					};
 				};
 			};
@@ -105,6 +161,7 @@
 			projectRoot = "";
 			targets = (
 				AA00000000000000000002 /* RSReceipts */,
+				AA00000000000000000015 /* RSReceiptsUITests */,
 			);
 		};
 /* End PBXProject section */
@@ -117,10 +174,24 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		AA00000000000000000018 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		AA00000000000000000007 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		AA00000000000000000016 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -222,6 +293,38 @@
 			};
 			name = Release;
 		};
+		AA00000000000000000020 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				"CODE_SIGNING_ALLOWED[sdk=iphonesimulator*]" = NO;
+				"CODE_SIGNING_REQUIRED[sdk=iphonesimulator*]" = NO;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = cc.rocketscience.receipts.uitests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = RSReceipts;
+			};
+			name = Debug;
+		};
+		AA00000000000000000021 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				"CODE_SIGNING_ALLOWED[sdk=iphonesimulator*]" = NO;
+				"CODE_SIGNING_REQUIRED[sdk=iphonesimulator*]" = NO;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = cc.rocketscience.receipts.uitests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = RSReceipts;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -239,6 +342,15 @@
 			buildConfigurations = (
 				AA0000000000000000000E /* Debug */,
 				AA0000000000000000000F /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		AA00000000000000000019 /* Build configuration list for PBXNativeTarget "RSReceiptsUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				AA00000000000000000020 /* Debug */,
+				AA00000000000000000021 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

@@ -72,3 +72,10 @@ Thumbs.db
 
 # Device data dumps (contain real receipts)
 device-backups/
+
+# Screen recordings for App Review, all rebuilt by ios/tour.sh. The raw captures are ~50 MB
+# each, and the two segment encodes are both inside the joined file — which is the one
+# actually attached to the reply, and the only one worth keeping.
+branding/appstore/review/*.mov
+branding/appstore/review/01-first-run.mp4
+branding/appstore/review/02-full-tour.mp4

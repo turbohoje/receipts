@@ -217,6 +217,19 @@ restaurant receipt with a signature. Two rules:
 
 Play screenshots must be **2:1 or squarer**; raw Pixel 11 captures are 2.24:1 and get rejected.
 
+`ios/tour.sh` films the app being used, which is what App Review asks an unfamiliar developer
+for. The taps come from `RSReceiptsUITests`, a UI test target in the app project, because
+nothing else can drive a phone unattended. `--device` films real hardware, which is what
+Apple wants, via XCTest's own screen recording pulled out of the result bundle; without it
+`simctl io recordVideo` films a simulator.
+
+A device run needs **Enable UI Automation** on (Settings → Developer — separate from
+Developer Mode; without it the runner dies with "Timed out while enabling automation mode")
+and **Auto-Lock set to Never**. Synthetic taps do not count as user activity, so the device
+sleeps mid-run and every interaction waits out a timeout: the same segment took 116s awake
+and 1728s asleep. It also wipes the app, so back the container up first — see
+[`docs/app-review.md`](docs/app-review.md), which also holds the written answers.
+
 ## Google Drive
 
 Registration is the whole setup — no client ID or secret is embedded anywhere. The trap, at
