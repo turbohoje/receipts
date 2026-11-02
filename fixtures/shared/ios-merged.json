@@ -1,0 +1,67 @@
+{
+  "currency" : "EUR",
+  "receipts" : [
+    {
+      "amountMinor" : 2700,
+      "createdAt" : 1,
+      "date" : 1000,
+      "deletedAt" : null,
+      "description" : "Taxi",
+      "id" : "r1",
+      "imageFile" : null,
+      "reportId" : "rep-1",
+      "updatedAt" : 2050,
+      "updatedBy" : "device-b"
+    },
+    {
+      "amountMinor" : 8100,
+      "createdAt" : 2,
+      "date" : 1000,
+      "deletedAt" : 2200,
+      "description" : "Dinner",
+      "id" : "r2",
+      "imageFile" : null,
+      "reportId" : "rep-1",
+      "updatedAt" : 2200,
+      "updatedBy" : "device-b"
+    },
+    {
+      "amountMinor" : 450,
+      "createdAt" : 3,
+      "date" : 1000,
+      "deletedAt" : null,
+      "description" : "Coffee",
+      "id" : "r3",
+      "imageFile" : null,
+      "reportId" : "rep-1",
+      "updatedAt" : 2100,
+      "updatedBy" : "device-a"
+    },
+    {
+      "amountMinor" : 222,
+      "createdAt" : 4,
+      "date" : 1000,
+      "deletedAt" : null,
+      "description" : "Museum",
+      "id" : "r4",
+      "imageFile" : null,
+      "reportId" : "rep-1",
+      "updatedAt" : 5000,
+      "updatedBy" : "device-b"
+    }
+  ],
+  "report" : {
+    "createdAt" : 1000,
+    "id" : "rep-1",
+    "name" : "Lisbon Trip (shared)",
+    "sortOrder" : 0,
+    "updatedAt" : 2300,
+    "updatedBy" : "device-b"
+  },
+  "reportId" : "rep-1",
+  "sharedVersion" : 1,
+  "versions" : {
+    "device-a" : 3,
+    "device-b" : 2
+  }
+}

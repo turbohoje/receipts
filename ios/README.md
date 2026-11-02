@@ -364,6 +364,18 @@ documented difference rather than a regression — a client ID is not a credenti
 v3-signature-block trap has no iOS analogue. Path A needs no registration on either platform and
 should ship first here, as it did on Android.
 
+## In-app help
+
+`How it works` under Settings (`UI/HelpScreen.swift`) documents backing up, sharing a report
+through a Drive file, and the fact that both work across Android and iOS. The Android app
+carries the same text in `ui/help/HelpContent.kt` — they are word for word identical, so change
+both together.
+
+## Releasing
+
+Android and iOS ship in pairs; the process, including everything the App Store needs, is in
+[`docs/releasing.md`](../docs/releasing.md).
+
 ## Signing, when it comes to that
 
 - **Simulator only** — no Apple account at all.

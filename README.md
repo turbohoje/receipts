@@ -26,6 +26,9 @@ The two platforms share a file format, not code. What keeps them honest is
 [`fixtures/interop/`](fixtures/interop): each platform's test suite reads the archive the other
 one wrote.
 
+Releases go out in **pairs** — the file formats are versioned and a reader refuses anything
+newer, so shipping one platform alone strands the other. See [`docs/releasing.md`](docs/releasing.md).
+
 **Every command in the Android sections below runs from `android/`**, not the repo root — the
 Gradle root, the wrapper and both device scripts live there.
 

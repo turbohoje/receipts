@@ -174,6 +174,28 @@ cd ios/RSReceiptsCore && swift run RSReceiptsCoreChecks   # 63 checks
 
 See `ios/README.md`.
 
+## Releasing
+
+**The two apps release in pairs.** The backup and shared-file formats carry a version and a
+reader refuses anything newer, so a one-sided release strands the other platform. Full process,
+including the iOS App Store steps and the Play re-signing trap, is in
+[`docs/releasing.md`](docs/releasing.md).
+
+## In-app help
+
+`How it works` under Settings documents backing up, sharing via a Drive file, and
+cross-platform compatibility. **The text is duplicated** — `ui/help/HelpContent.kt` on Android
+and `UI/HelpScreen.swift` on iOS — because the platforms share no UI code. They are word for
+word identical; change one and change the other.
+
+## Store assets
+
+`branding/play/` and `branding/appstore/` are both built from **invented data only** — on iOS
+from a simulator with `-seedDemoData`, which now also draws receipt *pictures* via
+`DemoReceiptImage` so the captures show the feature the app is built around. Reaching a given
+screen uses the throwaway `-TEMPscreen` flag; add it, capture, remove it. Recipe and sizes are
+in `branding/appstore/README.md`.
+
 ## Money
 
 Amounts are `Long` minor units (cents) everywhere. Never a floating point type, including in
@@ -188,9 +210,10 @@ restaurant receipt with a signature. Two rules:
 - **Check the foreground package before sending input.** A missed tap once landed in Slack.
   Resolve coordinates from `uiautomator dump` by text, never hardcode them, and abort if
   `dumpsys activity activities` does not show this app.
-- **Never use real data in store assets.** Build a demo backup in the app's own format, restore
-  it through Settings, capture, then restore the real backup. `branding/play/` was made this
-  way. Back up first: the release build is not debuggable, so `device-data.sh` cannot read it.
+- **Never use real data in store assets.** `branding/demo-backup.zip` is that demo backup,
+  already built — restore it through Settings, capture, then restore the real backup. Back up
+  first: the release build is not debuggable, so `device-data.sh` cannot read it. iOS needs
+  none of this dance; it has `-seedDemoData`. See `branding/README.md`.
 
 Play screenshots must be **2:1 or squarer**; raw Pixel 11 captures are 2.24:1 and get rejected.
 

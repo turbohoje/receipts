@@ -1,5 +1,36 @@
 # Release notes
 
+## 0.2.1 (versionCode 6) — first iOS release, and honest sync counts
+
+The iPhone and iPad app ships. It reads and writes the same backups and the same shared files
+as Android, in both directions, so a report can have one person on each kind of phone.
+
+### Store "What's new" (Play allows 500 characters)
+
+> RS Receipts is now on iPhone and iPad, and the two apps work together: back up on one and
+> restore on the other, or share a report between them. This update also adds a "How it works"
+> guide under Settings, and corrects the sync summary, which could report receipts as deleted
+> by someone else when you had deleted them yourself.
+
+*(338 characters.)*
+
+### What's new
+
+**The iOS app**
+- iPhone and iPad, with reports beside their receipts on iPad.
+- Backups and shared reports are interchangeable with Android in both directions.
+
+**How it works**
+- A guide under **Settings → How it works** covering backing up, sharing a report through a
+  file, and what works across Android and iOS. The same text on both platforms.
+
+### Fixed
+
+- The sync summary counted a receipt only this device had as "already matched" as well as
+  "sent from here", describing more receipts than the report held.
+- Re-syncing after deleting a receipt reported it as "deleted by others" — it was this
+  device's own deletion being replayed, and nothing was actually removed.
+
 ## 0.2.0 (versionCode 5) — sharing a report with someone else
 
 A report can now be shared. Save it to a file, hand that file to whoever you are splitting

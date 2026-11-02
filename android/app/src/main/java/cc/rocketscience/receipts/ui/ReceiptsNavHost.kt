@@ -23,6 +23,7 @@ object Routes {
     const val CAPTURE = "capture/{reportId}/{receiptId}"
     const val CROP = "crop/{reportId}/{receiptId}/{temp}"
     const val SETTINGS = "settings"
+    const val HELP = "help"
 
     /** Sentinel for "this receipt does not exist yet". */
     const val NEW = "new"
@@ -51,6 +52,10 @@ fun ReceiptsNavHost(container: AppContainer) {
                 onOpenReport = { navController.navigate(Routes.report(it)) },
                 onOpenSettings = { navController.navigate(Routes.SETTINGS) },
             )
+        }
+
+        composable(Routes.HELP) {
+            cc.rocketscience.receipts.ui.help.HelpScreen(onBack = { navController.popBackStack() })
         }
 
         composable(Routes.SETTINGS) {

@@ -16,6 +16,7 @@ struct SettingsScreen: View {
     @State private var pendingRestore: (url: URL, manifest: BackupManifest)?
     @State private var message: (title: String, detail: String)?
     @State private var working = false
+    @State private var showingHelp = false
 
     private let currency = Currency.forLocale()
 
@@ -26,6 +27,17 @@ struct SettingsScreen: View {
     var body: some View {
         NavigationStack {
             Form {
+                Section {
+                    Button {
+                        showingHelp = true
+                    } label: {
+                        Label("How it works", systemImage: "questionmark.circle")
+                    }
+                } footer: {
+                    Text("Backing up, sharing a report with someone, and what works across "
+                         + "Android and iPhone.")
+                }
+
                 Section("Currency") {
                     LabeledContent("Code", value: currency.code)
                     LabeledContent("Minor units", value: "10^\(currency.fractionDigits)")
@@ -81,6 +93,7 @@ struct SettingsScreen: View {
                     Button("Done") { dismiss() }
                 }
             }
+            .sheet(isPresented: $showingHelp) { HelpScreen() }
             .fileExporter(
                 isPresented: .init(
                     get: { exporting != nil },

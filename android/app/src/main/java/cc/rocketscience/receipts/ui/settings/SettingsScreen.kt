@@ -68,6 +68,7 @@ import cc.rocketscience.receipts.ui.formatDate
 fun SettingsScreen(
     factory: ViewModelProvider.Factory,
     onBack: () -> Unit,
+    onOpenHelp: () -> Unit = {},
 ) {
     val vm: SettingsViewModel = viewModel(factory = factory)
     val lastBackupAt by vm.lastBackupAt.collectAsState()
@@ -121,6 +122,16 @@ fun SettingsScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
+            Section("How it works") {
+                Text(
+                    "Backing up, sharing a report with someone, and what works across " +
+                        "Android and iPhone.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                TextButton(onClick = onOpenHelp) { Text("Read the guide") }
+            }
+
             Section("Currency") {
                 Text(
                     "${vm.currency.currencyCode} (${vm.currency.symbol})",

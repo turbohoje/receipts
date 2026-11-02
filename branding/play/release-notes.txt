@@ -1,12 +1,7 @@
 <en-US>
-First public release.
+RS Receipts is now on iPhone and iPad, and the two apps work together: back up on one and restore on the other, or share a report between them and have both sides' changes merge.
 
-Snap a receipt, crop it, add an amount. RS Receipts groups receipts into expense reports that total themselves.
-
-• Export a report as a PDF — summary table plus every receipt image
-• Or as a ZIP of images and a CSV
-• Back up to Google Drive, or to a file you choose, and restore onto a new phone
-• Works fully offline
-
-No account, no sign-up, no ads, no tracking. Your receipts stay on your phone.
+• New "How it works" guide under Settings
+• Backups and shared reports are interchangeable with the iPhone and iPad app, in both directions
+• Fixed: the sync summary could say receipts were deleted by someone else when you had deleted them yourself, and could count a receipt twice
 </en-US>

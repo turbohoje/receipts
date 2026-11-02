@@ -32,6 +32,10 @@ google-services.json
 client_secret*.json
 *.p12
 *.pepk
+# App Store Connect API key. Grants real access to the developer account — keep it in
+# ~/.appstoreconnect/private_keys, never in the repo.
+*.p8
+AuthKey_*
 
 # ---------- Reports and logs ----------
 lint-results*.html

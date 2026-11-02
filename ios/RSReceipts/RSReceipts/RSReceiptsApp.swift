@@ -13,7 +13,7 @@ struct RSReceiptsApp: App {
             fatalError("could not open the store: \(error)")
         }
         if DemoData.isRequested {
-            DemoData.seed(into: container.mainContext)
+            DemoData.seed(into: container.mainContext, pipeline: app.pipeline)
         }
         repairMissingTimestamps()
         startupSweep()
